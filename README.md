@@ -4,6 +4,8 @@ Version **0.7.5 (12)**. A native SwiftUI wallet for Massa Mainnet. iPhone, iOS 1
 
 Website: https://massive-x.com/ · Contact: info@massive-x.com
 
+Independent community wallet; not affiliated with or endorsed by Massa Labs.
+
 ## Features
 
 - Create or import an owned Massa account, import supported encrypted single-account Version 1 YAML, add watch-only addresses, rename/select wallets, and remove only the selected wallet.
