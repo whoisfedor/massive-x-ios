@@ -1,0 +1,46 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSFaceIDUsageDescription": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticate to access the selected wallet’s protected key."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authentifiez-vous pour accéder à la clé protégée du portefeuille sélectionné."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подтвердите личность для доступа к защищённому ключу выбранного кошелька."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autentíquese para acceder a la clave protegida de la cartera seleccionada."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请认证以访问所选钱包的受保护密钥。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authentifizieren Sie sich für den Zugriff auf den geschützten Schlüssel der ausgewählten Wallet."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

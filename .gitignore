@@ -1,0 +1,39 @@
+# Local build and IDE state
+.DS_Store
+DerivedData/
+build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.xcresult
+*.xcarchive
+*.ipa
+*.dSYM/
+*.log
+# Local credentials and wallet exports
+.env
+.env.*
+*.pem
+*.der
+*.cer
+*.p12
+*.pfx
+*.p8
+*.key
+*.mobileprovision
+*.provisionprofile
+*.keystore
+*.wallet
+*.yaml
+*.yml
+secrets/
+keystores/
+wallet-backups/
+# Private preparation material is not product source
+AGENTS.md
+artifacts/
+screenshots/
+MASSIVE_X_*
+node_modules/
