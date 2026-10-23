@@ -4,19 +4,13 @@ A native SwiftUI wallet for Massa Mainnet. iPhone, iOS 17 or later.
 
 Source version **0.7.5 (18)**, verified locally. This source publication does not indicate Apple approval or TestFlight availability.
 
-<p align="center">
-  <img src="screenshots/appicon.jpg" alt="Massive X app icon options" width="96">
-</p>
-
 ## Preview
 
 <p align="center">
-  <img src="screenshots/main.jpg" alt="Massive X wallet overview with financial details redacted" width="31%">
-  <img src="screenshots/activity.jpg" alt="Massive X Activity screen with personal activity redacted" width="31%">
-  <img src="screenshots/settings.jpg" alt="Massive X Settings" width="31%">
+  <a href="./screenshots/mainios.png">
+    <img src="./screenshots/mainios.png" alt="Massive X iOS preview" width="460">
+  </a>
 </p>
-
-Screenshots show the real app UI with financial and identifying information redacted; no sample transactions or balances have been added.
 
 Six app languages: English, French, Russian, Spanish, Simplified Chinese and German.
 
