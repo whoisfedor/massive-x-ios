@@ -6,9 +6,9 @@ Source version **0.7.5 (18)**, verified locally. This source publication does no
 
 ## Preview
 
-<p align="center">
+<p align="left">
   <a href="./screenshots/mainios.png">
-    <img src="./screenshots/mainios.png" alt="Massive X iOS preview" width="460">
+    <img src="./screenshots/mainios.png" alt="Massive X iOS preview" width="600">
   </a>
 </p>
 
