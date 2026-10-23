@@ -1,6 +1,24 @@
 # Massive X iOS
 
-Version **0.7.5 (12)**. A native SwiftUI wallet for Massa Mainnet. iPhone, iOS 17 or later; six app languages: English, French, Russian, Spanish, Simplified Chinese and German.
+A native SwiftUI wallet for Massa Mainnet. iPhone, iOS 17 or later.
+
+Source version **0.7.5 (18)**, verified locally. This source publication does not indicate Apple approval or TestFlight availability.
+
+<p align="center">
+  <img src="screenshots/appicon.jpg" alt="Massive X app icon options" width="96">
+</p>
+
+## Preview
+
+<p align="center">
+  <img src="screenshots/main.jpg" alt="Massive X wallet overview with financial details redacted" width="31%">
+  <img src="screenshots/activity.jpg" alt="Massive X Activity screen with personal activity redacted" width="31%">
+  <img src="screenshots/settings.jpg" alt="Massive X Settings" width="31%">
+</p>
+
+Screenshots show the real app UI with financial and identifying information redacted; no sample transactions or balances have been added.
+
+Six app languages: English, French, Russian, Spanish, Simplified Chinese and German.
 
 Website: https://massive-x.com/ · Contact: info@massive-x.com
 
@@ -18,7 +36,7 @@ Independent community wallet; not affiliated with or endorsed by Massa Labs.
 
 The project uses Swift 6, Apple frameworks and vendored C dependencies. No package download, Node runtime or external font is required to build the app. Recovery uses private keys or supported YAML files; mnemonic derivation is not implemented. Verified with Xcode 27.1; an earlier Xcode version has not been qualified for this snapshot.
 
-Clone the owner-approved repository URL once it is published. In the clone, open `MassiveX.xcodeproj`, choose the **MassiveX** scheme and an iPhone simulator. For a Release simulator build:
+Clone this repository, then open `MassiveX.xcodeproj`, choose the **MassiveX** scheme and an iPhone simulator. For a Release simulator build:
 
 ```sh
 xcodebuild -project MassiveX.xcodeproj -scheme MassiveX -configuration Release \
@@ -47,12 +65,18 @@ Use a new output directory each time. This does not install or launch the shippi
 
 Mainnet JSON-RPC: `https://mainnet.massa.net/api/v2`, chain ID 77658377. Strictly matching final execution reports from this official Massa Labs provider are accepted operationally only after durable terminal-resolution storage. This is **trust in the provider**, not independent cryptographic verification. Missing/pruned/speculative data, request failure and expiry alone do not resolve an ambiguous payment.
 
+For a pruned successful basic MAS operation, a separate explicit historical review can accept two matching official Explorer reports and finalized-block membership only after exact canonical operation/signature checks, fresh device-owner authentication, post-authentication revalidation and durable source-bound storage. This is owner-accepted indexed evidence, not RPC confirmation or independent consensus verification. Missing, failed, contradictory or mismatched evidence stays locked. Every new payment still requires fresh review and protected authorization; historical recovery never resubmits an old operation.
+
 Address history uses the official explorer indexer at `https://explorer-api.massa.net`; its contract is unversioned and is not a complete independent chain proof. Quote providers include CoinGecko and Frankfurter; coverage and freshness vary. Public addresses are sent to network services when their data is requested. No private key is sent to them. External exchange links do not connect exchange accounts or transfer funds automatically.
 
 Keychain user presence is not Secure Enclave-backed Ed25519 signing. Device loss requires a valid private backup; screenshots, clipboard exposure, memory zeroization, local journal rollback and cross-store crash consistency have limitations. Background notifications are opportunistic; iOS does not guarantee real-time execution. This source snapshot is not a claim of an independent audit, security certification or public-release readiness.
 
 ## Dependencies and rights
 
-The original application source code is licensed under the [MIT license](LICENSE), copyright (c) 2026 Fedor Ovchinnikov. Application artwork, icons, branding, names and trademarks are excluded from that source-code grant. See [artwork and trademark terms](ASSETS_AND_TRADEMARKS.md); redistribution permissions remain a publication blocker. Inclusion of compiled assets does not establish permission.
+The original application source code is licensed under the [MIT license](LICENSE), copyright (c) 2026 Fedor Ovchinnikov. Application artwork, icons, branding, names and trademarks are excluded from that source-code grant. See [artwork and trademark terms](ASSETS_AND_TRADEMARKS.md) for the separately treated imagery and limited descriptive use of third-party marks. No third-party trademark license or endorsement is claimed.
 
 See [vendored dependency versions, licenses and checksums](Vendor/README.md). Their existing upstream licenses and copyright notices remain unchanged and govern those components separately.
+
+## Source snapshot
+
+This public tree exports development snapshot `97147f41a08d92db39951185487efd4656cfb2be`, including the input fixes in `64bf510` and authenticated historical recovery in `474a2d7`. These provenance identifiers are distinct from this public repository’s commit history and from Apple build or release records. Private development history, signing overrides and internal verification material are not included.

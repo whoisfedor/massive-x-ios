@@ -1,4 +1,5 @@
 import XCTest
+import LocalAuthentication
 @testable import MassiveX
 
 private actor TransferTransport: RPCTransport {
@@ -123,6 +124,8 @@ private actor TrustedResolutionTransport: RPCTransport {
             operation["content"] = content; row["operation"] = operation
             if mode == "noContent" { row.removeValue(forKey: "operation") }
             result = state == .outcomeUnknown ? [] : mode == "duplicate" ? [row, row] : [row]
+        } else if method == "get_addresses" {
+            result = (body["params"] as! [[String]])[0].map { ["address": $0, "final_balance": "10", "candidate_balance": "10"] }
         } else { writes += 1; XCTFail("Resolution transports must never submit"); throw SendFailure.response }
         return RPCTransportResponse(data: try JSONSerialization.data(withJSONObject: ["jsonrpc": "2.0",
             "id": mode == "rpcID" ? "wrong" : body["id"]!, "result": result]), statusCode: mode == "http" ? 503 : 200)
@@ -491,5 +494,280 @@ extension TransferRPCTests {
         let recent = SendRecentRecipients.make(restored,for:draft.wallet)
         XCTAssertEqual(recent.count,1); XCTAssertEqual(recent.first?.address,draft.recipient)
         XCTAssertEqual(SendRecentRecipients.make(restored,for:other.wallet).first?.address,other.recipient)
+    }
+}
+
+@MainActor extension TransferRPCTests {
+    func testOldUnverifiedTerminalBecomesDurableReceiptAndFreshManualReview() async throws {
+        for outcome in [SubmissionState.finalized, .failed] {
+            let (current, signature) = try resolutionFixture()
+            let draft = ReviewedTransfer(wallet: current.wallet, recipient: current.recipient, amount: current.amount,
+                fee: current.fee, total: current.total, expiry: current.expiry, reviewedAt: Date().addingTimeInterval(-86_400),
+                content: current.content, operationID: current.operationID, recipientCredit: current.recipientCredit)
+            let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let journal = FileTransferJournal(url: directory.appending(path: "isolated.json"))
+            try journal.write([PendingTransfer(draft: draft, state: outcome, tracking: .historicalNodeReport)])
+            let transport = TrustedResolutionTransport(draft, signature: signature, states: [outcome], version: "MAIN.5.1")
+            let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: transport), journal: journal)
+            coordinator.select(draft.wallet)
+            XCTAssertNotNil(coordinator.unresolved(draft.wallet)); XCTAssertFalse(coordinator.beginNewTransfer(for: draft.wallet))
+            XCTAssertNil(coordinator.recentUnresolvedOperationID)
+            await coordinator.pollRecentOperation(draft.operationID) { XCTFail("Old intents must not be automatically polled") }
+            let beforeManual = await transport.reads; XCTAssertEqual(beforeManual, 0)
+            await coordinator.reconcile(try XCTUnwrap(coordinator.unresolved(draft.wallet)))
+            XCTAssertNil(coordinator.unresolved(draft.wallet)); XCTAssertTrue(try journal.read().first?.hasTrustedResolution == true)
+            XCTAssertTrue(SendStatusPresentation.evidenceMessage(coordinator.pending.first).contains(L("Confirmed by Massa Mainnet RPC")))
+            let restarted = SendCoordinator(network: MainnetTransferRPC(transport: transport), journal: journal)
+            restarted.select(draft.wallet); restarted.invalidateReview(); restarted.select(nil); restarted.select(draft.wallet)
+            XCTAssertTrue(restarted.beginNewTransfer(for: draft.wallet)); XCTAssertEqual(restarted.phase, .draft)
+            await restarted.prepare(wallet: draft.wallet, recipient: draft.recipient, amount: draft.amount.text)
+            XCTAssertEqual(restarted.phase, .review)
+            XCTAssertNotEqual(restarted.review?.operationID, draft.operationID)
+            XCTAssertEqual(try journal.read().first?.draft, draft)
+            let writes = await transport.writes; XCTAssertEqual(writes, 0, "New review does not authenticate or submit")
+        }
+    }
+    func testRecoveryTextNeverConfirmsUnresolvedOrMalformedTrustedLabels() throws {
+        let (draft, _) = try resolutionFixture()
+        let malformed = ReconciliationAssessment(state: .outcomeUnknown, reason: .trustedMassaLabs, checkedAt: Date(), reportedFinalPeriod: nil)
+        for record in [PendingTransfer(draft: draft, state: .outcomeUnknown), PendingTransfer(draft: draft, state: .outcomeUnknown, assessment: malformed)] {
+            XCTAssertEqual(SendStatusPresentation.evidenceMessage(record), L("Not yet confirmed by Massa Mainnet RPC."))
+            XCTAssertFalse(record.hasTrustedResolution)
+        }
+    }
+    func testRecentPollingIsBoundedReadOnlyAndOldPrunedIntentNeverUnlocks() async throws {
+        let (draft, signature) = try resolutionFixture()
+        let transport = TrustedResolutionTransport(draft, signature: signature, states: [.outcomeUnknown])
+        let journal = ResolutionJournal(PendingTransfer(draft: draft, state: .outcomeUnknown))
+        let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: transport), journal: journal)
+        coordinator.select(draft.wallet); var pauses = 0
+        await coordinator.pollRecentOperation(draft.operationID) { pauses += 1 }
+        XCTAssertEqual(pauses, 3); XCTAssertNotNil(coordinator.unresolved(draft.wallet))
+        XCTAssertFalse(coordinator.beginNewTransfer(for: draft.wallet)); XCTAssertEqual(coordinator.failure, .duplicate)
+        let reads = await transport.reads, writes = await transport.writes
+        XCTAssertEqual(reads, 8); XCTAssertEqual(writes, 0)
+        XCTAssertFalse(SendStatusPresentation.evidenceMessage(coordinator.pending.first).contains(L("Confirmed by Massa Mainnet RPC")))
+        let otherAccount = MassaTestAccount(), identity = try otherAccount.publicAccount
+        let other = try SendWallet(ManagedWallet(id: UUID().uuidString, name: "Other disposable", address: identity.address,
+            publicKey: identity.publicKey, kind: .owned, network: "Mainnet", backupAcknowledged: false))
+        coordinator.select(other); XCTAssertTrue(coordinator.beginNewTransfer(for: other))
+        await coordinator.prepare(wallet: other, recipient: draft.recipient, amount: "1")
+        XCTAssertEqual(coordinator.phase, .review); XCTAssertNotNil(coordinator.unresolved(draft.wallet))
+        coordinator.select(draft.wallet); XCTAssertNotNil(coordinator.unresolved(draft.wallet)); XCTAssertEqual(coordinator.review?.operationID, draft.operationID)
+    }
+    func testRecentPollingCollectsReceiptOrStopsOnCancellationAndSelectionChange() async throws {
+        for mode in ["final", "cancel", "selection"] {
+            let (draft, signature) = try resolutionFixture()
+            let states: [SubmissionState] = mode == "final" ? [.pending, .pending, .finalized] : [.outcomeUnknown]
+            let transport = TrustedResolutionTransport(draft, signature: signature, states: states)
+            let journal = ResolutionJournal(PendingTransfer(draft: draft, state: .outcomeUnknown))
+            let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: transport), journal: journal)
+            coordinator.select(draft.wallet)
+            await coordinator.pollRecentOperation(draft.operationID) {
+                if mode == "cancel" { throw CancellationError() }
+                if mode == "selection" { coordinator.select(nil) }
+            }
+            XCTAssertEqual(coordinator.unresolved(draft.wallet) == nil, mode == "final")
+            let reads = await transport.reads, writes = await transport.writes
+            XCTAssertEqual(reads, mode == "final" ? 4 : 2); XCTAssertEqual(writes, 0)
+        }
+    }
+}
+
+@MainActor extension TransferRPCTests {
+    func testCancelledForegroundReconciliationLeavesOriginalLockedWithoutSpuriousFailure() async throws {
+        let (draft, signature) = try resolutionFixture()
+        let transport = TrustedResolutionTransport(draft, signature: signature, mode: "delay")
+        let journal = ResolutionJournal(PendingTransfer(draft: draft, state: .outcomeUnknown))
+        let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: transport), journal: journal)
+        coordinator.select(draft.wallet)
+        let task = Task { await coordinator.pollRecentOperation(draft.operationID) }
+        for _ in 0..<100 { if await transport.reads > 0 { break }; await Task.yield() }
+        task.cancel(); await task.value
+        XCTAssertNil(coordinator.failure); XCTAssertNotNil(coordinator.unresolved(draft.wallet))
+        XCTAssertEqual(journal.records.first?.draft, draft); XCTAssertFalse(journal.records.first?.hasTrustedResolution ?? true)
+        let writes = await transport.writes; XCTAssertEqual(writes, 0)
+        coordinator.invalidateReview(); coordinator.select(nil); coordinator.select(draft.wallet)
+        XCTAssertFalse(coordinator.beginNewTransfer(for: draft.wallet))
+    }
+}
+
+/// Disposable generated accounts and injected transport only. Never queries a real address.
+private actor HistoricalFixtureTransport: RPCTransport {
+    let draft: ReviewedTransfer
+    let signature: String
+    let mode: String
+    let version: String
+    private(set) var reads = 0
+    init(_ draft: ReviewedTransfer, signature: String, mode: String = "valid", version: String = "MAIN.5.1") {
+        self.draft = draft; self.signature = signature; self.mode = mode; self.version = version
+    }
+    func send(_ request: URLRequest) async throws -> RPCTransportResponse {
+        if mode == "offline" { throw URLError(.notConnectedToInternet) }
+        let result: Any
+        if request.httpMethod == "POST" {
+            let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+            guard request.url?.absoluteString == TrustedMassaRPCResolution.endpoint, body["method"] as? String == "get_status" else { XCTFail("No writes allowed"); throw SendFailure.response }
+            result = ["jsonrpc": "2.0", "id": body["id"]!, "result": ["chain_id": mode == "chain" ? 1 : 77658377,
+                "version": version, "current_time": UInt64(Date().timeIntervalSince1970 * 1000)]] as [String: Any]
+        } else {
+            XCTAssertEqual(request.url?.host, "explorer-api.massa.net"); XCTAssertEqual(request.value(forHTTPHeaderField: "x-network"), "mainnet")
+            let changed = mode == "changedAfterAuth" && reads >= (request.url!.path.hasPrefix("/operation/") ? 2 : 3)
+            let block = try MassaCodec.encode(Data(repeating: changed ? 88 : 87, count: 32), prefix: "B")
+            let timestamp = String(UInt64(Date().timeIntervalSince1970 / 86_400) * 86_400_000 - 86_400_000)
+            if request.url!.path.hasPrefix("/operation/") {
+                reads += 1
+                var row = TrustedRPCFixture.operation(draft, signature: signature, state: .finalized)
+                row["in_blocks"] = mode == "duplicateBlock" ? [block, block] : [block]
+                row["thread"] = 3; row["timestamp"] = timestamp
+                row["in_pool"] = true // Captured Explorer metadata can outlive actual pool membership.
+                var signed = row["operation"] as! [String: Any], content = signed["content"] as! [String: Any]
+                content["fee"] = String(draft.fee.nano)
+                content["op"] = ["Transaction": ["recipient_address": draft.recipient, "amount": String(draft.amount.nano)]]
+                switch mode {
+                case "wrongID": row["id"] = block
+                case "source": signed["content_creator_address"] = draft.recipient
+                case "recipient": content["op"] = ["Transaction": ["recipient_address": draft.wallet.address, "amount": draft.amount.text]]
+                case "amount": content["op"] = ["Transaction": ["recipient_address": draft.recipient, "amount": "9"]]
+                case "fee": content["fee"] = "0.9"
+                case "signature": signed["signature"] = "bad"
+                case "failed": row["op_exec_status"] = false
+                case "pending": row["is_operation_final"] = false
+                case "nullOutcome": row["op_exec_status"] = NSNull()
+                default: break
+                }
+                // The real Explorer uses null entries for inactive operation variants.
+                var variants = content["op"] as! [String: Any]
+                for key in ["RollBuy", "RollSell", "ExecuteSC", "CallSC"] { variants[key] = NSNull() }
+                content["op"] = variants; signed["content"] = content; row["operation"] = signed
+                result = row
+            } else {
+                let item: [String: Any] = ["hash": draft.operationID, "status": "Final", "type": "Transaction", "from": draft.wallet.address,
+                    "to": draft.recipient, "value": String(draft.amount.nano), "transaction_fee": String(draft.fee.nano), "op_exec_status": true]
+                result = ["block": ["hash": block, "is_final": mode != "candidateBlock", "period": draft.expiry - 1,
+                    "thread": 3, "block_time": timestamp, "latest_ops": mode == "missingMembership" ? [] : mode == "duplicateRow" ? [item,item] : [item]]] as [String: Any]
+            }
+        }
+        return RPCTransportResponse(data: try JSONSerialization.data(withJSONObject: result), statusCode: 200, contentType: "application/json")
+    }
+}
+@MainActor private final class HistoricalAuth: WalletAuthenticating {
+    var calls = 0
+    var reject = false
+    var onAuthorize: (() -> Void)?
+    func authorize(reason: String) async throws -> LAContext {
+        calls += 1; onAuthorize?()
+        if reject { throw OnboardingError.cancelled }; return LAContext()
+    }
+    func cancel() {}
+}
+@MainActor extension TransferRPCTests {
+    func testHistoricalIndexedSuccessCannotUnlockBeforeAuthenticatedReviewAndDurableSave() async throws {
+        for version in ["MAIN.5.0", "MAIN.5.1"] {
+            let (draft, signature) = try resolutionFixture()
+            let transport = HistoricalFixtureTransport(draft, signature: signature, version: version)
+            let journal = ResolutionJournal(PendingTransfer(draft: draft, state: .outcomeUnknown)), auth = HistoricalAuth()
+            let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport("missing")), journal: journal,
+                historicalClient: OfficialHistoricalClient(transport: transport), historicalAuthentication: { auth })
+            coordinator.select(draft.wallet); coordinator.historicalPrivacy(active: true, captured: false)
+            await coordinator.reconcile(try XCTUnwrap(coordinator.unresolved(draft.wallet)))
+            XCTAssertNotNil(coordinator.unresolved(draft.wallet)) // RPC [] is NOT a contradiction or terminal result.
+            await coordinator.prepareHistoricalRecovery(try XCTUnwrap(coordinator.unresolved(draft.wallet)))
+            let approved = try XCTUnwrap(coordinator.historicalReview)
+            XCTAssertEqual(auth.calls, 0); XCTAssertNotNil(coordinator.unresolved(draft.wallet))
+            var lockedAtWrite = false
+            journal.afterWrite = { records in if records.first?.hasTrustedResolution == true { lockedAtWrite = coordinator.unresolved(draft.wallet) != nil } }
+            await coordinator.confirmHistoricalRecovery(approved)
+            XCTAssertEqual(auth.calls, 1); XCTAssertTrue(lockedAtWrite); XCTAssertNil(coordinator.unresolved(draft.wallet))
+            let record = try XCTUnwrap(journal.records.first)
+            XCTAssertEqual(record.draft, draft); XCTAssertNil(record.assessment?.providerResolution)
+            XCTAssertNotNil(record.assessment?.historicalResolution)
+            XCTAssertEqual(record.assessment?.reason, .ownerReviewedHistorical)
+            XCTAssertNotEqual(SendStatusPresentation.evidenceMessage(record), ReconciliationAssessment(state: .finalized, reason: .trustedMassaLabs, checkedAt: Date(), reportedFinalPeriod: nil).message)
+            let restarted = SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal)
+            restarted.select(draft.wallet); XCTAssertTrue(restarted.beginNewTransfer(for: draft.wallet))
+            await restarted.prepare(wallet: draft.wallet, recipient: draft.recipient, amount: "2")
+            XCTAssertEqual(restarted.phase, .review); XCTAssertNotEqual(restarted.review?.operationID, draft.operationID)
+            let methods = await transport.reads; XCTAssertEqual(methods, 4) // Two before review, two after auth; no submit implementation.
+        }
+    }
+    func testHistoricalMismatchesFailureCandidateUnknownAndOfflineNeverUnlock() async throws {
+        for mode in ["wrongID","source","recipient","amount","fee","signature","failed","pending","nullOutcome","candidateBlock","missingMembership","duplicateBlock","duplicateRow","chain","offline"] {
+            let (draft, signature) = try resolutionFixture(), journal = ResolutionJournal(PendingTransfer(draft: draft, state: .outcomeUnknown)), auth = HistoricalAuth()
+            let client = OfficialHistoricalClient(transport: HistoricalFixtureTransport(draft, signature: signature, mode: mode))
+            let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal, historicalClient: client, historicalAuthentication: { auth })
+            coordinator.select(draft.wallet); coordinator.historicalPrivacy(active: true, captured: false)
+            await coordinator.prepareHistoricalRecovery(try XCTUnwrap(coordinator.unresolved(draft.wallet)))
+            XCTAssertNil(coordinator.historicalReview, mode); XCTAssertNotNil(coordinator.unresolved(draft.wallet), mode); XCTAssertEqual(auth.calls, 0)
+        }
+    }
+    func testHistoricalAuthCancellationChangedEvidenceAndJournalFailureRetainIntent() async throws {
+        for mode in ["cancel","changedAfterAuth","writeFailure","background","selection"] {
+            let (draft, signature) = try resolutionFixture(), journal = ResolutionJournal(PendingTransfer(draft: draft, state: .outcomeUnknown)), auth = HistoricalAuth()
+            let client = OfficialHistoricalClient(transport: HistoricalFixtureTransport(draft, signature: signature, mode: mode))
+            let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal, historicalClient: client, historicalAuthentication: { auth })
+            coordinator.select(draft.wallet); coordinator.historicalPrivacy(active: true, captured: false)
+            await coordinator.prepareHistoricalRecovery(try XCTUnwrap(coordinator.unresolved(draft.wallet)))
+            let approved = try XCTUnwrap(coordinator.historicalReview)
+            auth.reject = mode == "cancel"; journal.fail = mode == "writeFailure"
+            if mode == "background" { auth.onAuthorize = { coordinator.historicalPrivacy(active: false, captured: false, background: true) } }
+            if mode == "selection" { auth.onAuthorize = { coordinator.select(nil) } }
+            await coordinator.confirmHistoricalRecovery(approved)
+            XCTAssertNotNil(coordinator.unresolved(draft.wallet), mode); XCTAssertFalse(journal.records.first?.hasTrustedResolution ?? true)
+            XCTAssertEqual(journal.records.first?.draft, draft)
+        }
+    }
+    func testHistoricalReceiptRestartCorruptionRollbackDuplicateAndOtherSourcesStayScoped() async throws {
+        let (draft, signature) = try resolutionFixture(), (other, _) = try resolutionFixture()
+        let path = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: path) }
+        let journal = FileTransferJournal(url: path.appending(path: "records.json"))
+        let records = [PendingTransfer(draft: draft, state: .outcomeUnknown), PendingTransfer(draft: other, state: .outcomeUnknown)]
+        try journal.write(records)
+        let auth = HistoricalAuth(), client = OfficialHistoricalClient(transport: HistoricalFixtureTransport(draft, signature: signature))
+        let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal, historicalClient: client, historicalAuthentication: { auth })
+        coordinator.select(draft.wallet); coordinator.historicalPrivacy(active: true, captured: false)
+        await coordinator.prepareHistoricalRecovery(try XCTUnwrap(coordinator.unresolved(draft.wallet)))
+        let approved = try XCTUnwrap(coordinator.historicalReview)
+        await coordinator.confirmHistoricalRecovery(approved); await coordinator.confirmHistoricalRecovery(approved)
+        XCTAssertEqual(auth.calls, 1); XCTAssertNil(coordinator.unresolved(draft.wallet)); XCTAssertNotNil(coordinator.unresolved(other.wallet))
+        let restarted = SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal)
+        XCTAssertNil(restarted.unresolved(draft.wallet)); XCTAssertNotNil(restarted.unresolved(other.wallet))
+        let saved = try journal.read(); XCTAssertEqual(saved.count, 2)
+        var malformed = try XCTUnwrap(saved.first { $0.draft.operationID == draft.operationID })
+        let receipt = try XCTUnwrap(malformed.assessment?.historicalResolution)
+        malformed.assessment?.historicalResolution = OwnerHistoricalResolution(policy: "forged-policy", authorizationMethod: receipt.authorizationMethod, authorizedAt: receipt.authorizedAt, acceptedAt: receipt.acceptedAt, evidence: receipt.evidence)
+        XCTAssertThrowsError(try journal.write([malformed]))
+        XCTAssertEqual(try journal.read(), saved) // Failed replacement preserves bytes/records.
+        try journal.write(records) // Older unresolved snapshot can relock, never fabricate completion.
+        XCTAssertNotNil(SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal).unresolved(draft.wallet))
+        try Data("{".utf8).write(to: path.appending(path: "records.json"))
+        XCTAssertNotNil(SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal).journalIssue)
+    }
+    func testHistoricalContradictoryTerminalClaimsCannotBeOverriddenByOwnerReview() async throws {
+        let (draft, signature) = try resolutionFixture()
+        let assessment = ReconciliationAssessment(state: .outcomeUnknown, reason: .conflictingObservations, checkedAt: Date(), reportedFinalPeriod: nil, terminalClaims: [.finalized,.failed])
+        let journal = ResolutionJournal(PendingTransfer(draft: draft, state: .outcomeUnknown, assessment: assessment)), auth = HistoricalAuth()
+        let coordinator = SendCoordinator(network: MainnetTransferRPC(transport: TransferTransport()), journal: journal,
+            historicalClient: OfficialHistoricalClient(transport: HistoricalFixtureTransport(draft, signature: signature)), historicalAuthentication: { auth })
+        coordinator.select(draft.wallet); coordinator.historicalPrivacy(active: true, captured: false)
+        await coordinator.prepareHistoricalRecovery(try XCTUnwrap(coordinator.unresolved(draft.wallet)))
+        XCTAssertNil(coordinator.historicalReview); XCTAssertNotNil(coordinator.unresolved(draft.wallet)); XCTAssertEqual(auth.calls, 0)
+    }
+}
+
+@MainActor extension TransferRPCTests {
+    func testHistoricalNanoUnitsAndSixLocalizedReviewMessages() throws {
+        XCTAssertEqual(try HistoricalEvidence.amount("1000000000"), MASAmount(nano: 1_000_000_000))
+        for invalid in ["1.0", "0.01", "01", "-1", "1e9", "18446744073709551616"] {
+            XCTAssertThrowsError(try HistoricalEvidence.amount(invalid))
+        }
+        for language in AppLanguage.allCases {
+            let bundle = try XCTUnwrap(Bundle(path: XCTUnwrap(Bundle.main.path(forResource: language.rawValue, ofType: "lproj"))))
+            for key in ["Review historical payment", "Authenticate and accept historical result", "Accept this historical payment result.", "This does not send or retry a payment."] {
+                XCTAssertNotEqual(bundle.localizedString(forKey: key, value: "MISSING", table: nil), "MISSING")
+            }
+        }
     }
 }

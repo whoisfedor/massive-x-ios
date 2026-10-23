@@ -19680,6 +19680,646 @@
           }
         }
       }
+    },
+    "New transfer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New transfer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouveau transfert"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новый перевод"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva transferencia"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新转账"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Überweisung"
+          }
+        }
+      }
+    },
+    "Not yet confirmed by Massa Mainnet RPC.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not yet confirmed by Massa Mainnet RPC."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas encore confirmé par le RPC Massa Mainnet."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока не подтверждено RPC основной сети Massa."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no confirmado por el RPC de Massa Mainnet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未由 Massa 主网 RPC 确认。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht vom Massa-Mainnet-RPC bestätigt."
+          }
+        }
+      }
+    },
+    "Copy text before pasting.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy text before pasting."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiez du texte avant de le coller."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопируйте текст перед вставкой."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copia texto antes de pegarlo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先复制文本再粘贴。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopieren Sie vor dem Einfügen einen Text."
+          }
+        }
+      }
+    },
+    "Paste password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste password"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coller le mot de passe"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить пароль"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pegar contraseña"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴密码"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwort einfügen"
+          }
+        }
+      }
+    },
+    "Review historical payment": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review historical payment"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Examiner le paiement historique"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить прошлый платёж"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisar pago histórico"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "审核历史付款"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historische Zahlung prüfen"
+          }
+        }
+      }
+    },
+    "Historical payment found": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historical payment found"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paiement historique trouvé"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прошлый платёж найден"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pago histórico encontrado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已找到历史付款"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historische Zahlung gefunden"
+          }
+        }
+      }
+    },
+    "The official Explorer reports Final and Success. Its signature and payment details match this stored intent.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The official Explorer reports Final and Success. Its signature and payment details match this stored intent."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’explorateur officiel indique Final et Succès. La signature et les détails du paiement correspondent à cette intention enregistrée."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Официальный обозреватель сообщает: платёж финализирован и выполнен успешно. Подпись и данные платежа соответствуют сохранённой операции."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El explorador oficial indica Final y Éxito. La firma y los datos del pago coinciden con esta intención guardada."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方浏览器报告交易已最终确认且执行成功。签名及付款详情与此已保存的付款意图一致。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der offizielle Explorer meldet Final und Erfolgreich. Signatur und Zahlungsdetails stimmen mit dieser gespeicherten Zahlungsabsicht überein."
+          }
+        }
+      }
+    },
+    "This is indexed historical evidence, not RPC confirmation or independent consensus verification. Authenticate only if you accept this specific result.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is indexed historical evidence, not RPC confirmation or independent consensus verification. Authenticate only if you accept this specific result."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il s’agit de données historiques indexées, et non d’une confirmation RPC ni d’une vérification indépendante du consensus. Authentifiez-vous uniquement si vous acceptez ce résultat précis."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это исторические данные индексатора, а не подтверждение RPC или независимая проверка консенсуса. Подтверждайте личность, только если принимаете именно этот результат."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Son datos históricos indexados, no una confirmación RPC ni una verificación independiente del consenso. Autentícate solo si aceptas este resultado específico."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是索引器提供的历史证据，并非 RPC 确认或独立的共识验证。仅在接受此特定结果时进行身份验证。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dies sind indexierte historische Daten, keine RPC-Bestätigung oder unabhängige Konsensprüfung. Authentifizieren Sie sich nur, wenn Sie dieses konkrete Ergebnis akzeptieren."
+          }
+        }
+      }
+    },
+    "Authenticate and accept historical result": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticate and accept historical result"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S’authentifier et accepter ce résultat"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подтвердить личность и принять результат"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autenticarse y aceptar el resultado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证身份并接受历史结果"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authentifizieren und Ergebnis akzeptieren"
+          }
+        }
+      }
+    },
+    "Accept this historical payment result.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accept this historical payment result."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepter ce résultat de paiement historique."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принять этот результат прошлого платежа."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aceptar este resultado de pago histórico."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接受此历史付款结果。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses historische Zahlungsergebnis akzeptieren."
+          }
+        }
+      }
+    },
+    "Historical result accepted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historical result accepted"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Résultat historique accepté"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Результат прошлого платежа принят"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultado histórico aceptado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已接受历史结果"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historisches Ergebnis akzeptiert"
+          }
+        }
+      }
+    },
+    "Accepted after your authenticated review of official Explorer evidence.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepted after your authenticated review of official Explorer evidence."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepté après votre examen authentifié des données de l’explorateur officiel."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принято после проверки данных официального обозревателя с подтверждением вашей личности."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aceptado tras tu revisión autenticada de los datos del explorador oficial."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在您验证身份并审核官方浏览器证据后接受。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach Ihrer authentifizierten Prüfung der offiziellen Explorer-Daten akzeptiert."
+          }
+        }
+      }
+    },
+    "Accepted after your authenticated review of official Explorer evidence. This is not RPC confirmation or independent consensus verification.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepted after your authenticated review of official Explorer evidence. This is not RPC confirmation or independent consensus verification."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepté après votre examen authentifié des données de l’explorateur officiel. Ce n’est ni une confirmation RPC ni une vérification indépendante du consensus."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принято после проверки данных официального обозревателя с подтверждением вашей личности. Это не подтверждение RPC и не независимая проверка консенсуса."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aceptado tras tu revisión autenticada de los datos del explorador oficial. No es una confirmación RPC ni una verificación independiente del consenso."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在您验证身份并审核官方浏览器证据后接受。这并非 RPC 确认或独立的共识验证。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach Ihrer authentifizierten Prüfung der offiziellen Explorer-Daten akzeptiert. Dies ist keine RPC-Bestätigung oder unabhängige Konsensprüfung."
+          }
+        }
+      }
+    },
+    "Historical evidence is unavailable, conflicting or does not match. This payment stays locked.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historical evidence is unavailable, conflicting or does not match. This payment stays locked."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les données historiques sont indisponibles, contradictoires ou ne correspondent pas. Ce paiement reste verrouillé."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Исторические данные недоступны, противоречивы или не совпадают. Платёж остаётся заблокированным."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los datos históricos no están disponibles, son contradictorios o no coinciden. Este pago sigue bloqueado."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史证据不可用、存在冲突或不匹配。此付款仍被锁定。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die historischen Daten sind nicht verfügbar, widersprüchlich oder stimmen nicht überein. Diese Zahlung bleibt gesperrt."
+          }
+        }
+      }
+    },
+    "This does not send or retry a payment.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This does not send or retry a payment."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette action n’envoie ni ne réessaie un paiement."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это действие не отправляет и не повторяет платёж."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto no envía ni reintenta un pago."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作不会发送或重试付款。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hierdurch wird keine Zahlung gesendet oder wiederholt."
+          }
+        }
+      }
+    },
+    "Evidence source": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evidence source"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source des données"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Источник данных"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuente de los datos"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "证据来源"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenquelle"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

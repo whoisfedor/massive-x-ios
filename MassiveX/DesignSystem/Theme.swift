@@ -105,14 +105,12 @@ struct CompactPasteButton: View {
     let label: String
     let receive: ([String]) -> Void
     var body: some View {
-        Button {
-            guard UIApplication.shared.applicationState == .active, !UIScreen.main.isCaptured,
-                  let value = UIPasteboard.general.string, !value.isEmpty else { return }
-            receive([value])
-        } label: {
-            Image(systemName: "doc.on.clipboard").font(.body.weight(.medium)).frame(width: 44, height: 44)
-        }.buttonStyle(.plain).foregroundStyle(Theme.accent)
-            .background(Theme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 12)).accessibilityLabel(label)
+        PasteButton(payloadType: String.self) { values in
+            guard UIApplication.shared.applicationState == .active, !UIScreen.main.isCaptured else { return }
+            receive(values)
+        }.labelStyle(.iconOnly).buttonBorderShape(.roundedRectangle)
+            .tint(Theme.accent).frame(minWidth: 44, minHeight: 44)
+            .accessibilityLabel(label).accessibilityHint(L("Copy text before pasting."))
     }
 }
 

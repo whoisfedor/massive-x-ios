@@ -23,7 +23,7 @@ final class MainnetMigrationTests: XCTestCase {
         let suite = "mainnet-migration." + UUID().uuidString, prefs = UserDefaults(suiteName: suite)!
         defer { prefs.removePersistentDomain(forName: suite) }
         let account = MassaTestAccount(), identity = try account.publicAccount, id = UUID().uuidString
-        // Legacy public catalog shape, with no Mainnet provenance fields.
+        // Exact public shape from a22dbbc, with no Mainnet provenance fields.
         let old: [String: Any] = ["wallets": [["id": id, "name": "My preview", "address": identity.address,
             "publicKey": identity.publicKey, "kind": "owned", "network": "Buildnet", "backupAcknowledged": true]], "selectedID": id]
         let bytes = try JSONSerialization.data(withJSONObject: old)

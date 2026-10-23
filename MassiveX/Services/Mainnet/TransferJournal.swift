@@ -23,7 +23,7 @@ enum TransferJournalPolicy {
         do {
             for record in records {
                 try record.draft.validate()
-                if record.assessment?.providerResolution != nil {
+                if record.assessment?.providerResolution != nil || record.assessment?.historicalResolution != nil {
                     guard record.hasTrustedResolution else { throw TransferJournalError.corrupt }
                 }
                 if let assessment = record.assessment {

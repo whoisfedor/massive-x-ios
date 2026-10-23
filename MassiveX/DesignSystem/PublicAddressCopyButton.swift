@@ -21,6 +21,7 @@ struct PublicAddressCopyButton: View {
     @Environment(AppLanguageSettings.self) private var language
     let address: String
     var display: String? = nil
+    var alignsTextToTop = false
     @State private var feedback = PublicAddressCopyState()
     var body: some View {
         let _ = language.language
@@ -34,7 +35,7 @@ struct PublicAddressCopyButton: View {
                 Text(display ?? address).fixedSize(horizontal: false, vertical: true)
                     .opacity(feedback.copiedAddress == address ? 0 : 1).accessibilityHidden(true)
                 if feedback.copiedAddress == address { Text(L("Copied")).foregroundStyle(Theme.accent).accessibilityHidden(true) }
-            }.frame(minHeight: 44).contentShape(Rectangle())
+            }.frame(minHeight: 44, alignment: alignsTextToTop ? .topLeading : .leading).contentShape(Rectangle())
         }.buttonStyle(.borderless).foregroundStyle(.primary)
             .disabled((try? MassaPublicAccount.validateAddress(address)) == nil)
             .accessibilityLabel(L("Copy address") + ": " + address)

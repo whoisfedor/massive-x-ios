@@ -84,7 +84,7 @@ struct AddWalletView: View {
     var onAdded: () -> Void = {}
     @Environment(SendCoordinator.self) private var send
     @Environment(AppLanguageSettings.self) private var liveLanguage
-    private enum Mode { case choices, newWallet, privateKey, watchOnly, yaml }
+    enum Mode { case choices, newWallet, privateKey, watchOnly, yaml }
     @Environment(WalletManager.self) private var wallets
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var phase
@@ -94,8 +94,11 @@ struct AddWalletView: View {
     @State private var key = ""
     @State private var address = ""
     private enum Field: Hashable { case name, key, address }
-    @FocusState private var focused: Field?
+    @State private var focused: Field?
     @State private var nameError = false
+    init(onAdded: @escaping () -> Void = {}, initialMode: Mode = .choices) {
+        self.onAdded = onAdded; _mode = State(initialValue: initialMode)
+    }
     private var privateScene: Bool { phase == .active && !captured }
     var body: some View {
         let _ = liveLanguage.language
@@ -111,31 +114,30 @@ struct AddWalletView: View {
                     }
                 } else if mode == .yaml {
                     YAMLWalletImportForm(onAdded: onAdded)
-                } else if privateScene {
+                } else {
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(L("Wallet name (optional)")).font(.caption).foregroundStyle(.secondary)
-                            TextField(L("Wallet name (optional)"), text: $name).textInputAutocapitalization(.words).focused($focused, equals: .name).submitLabel(.done).onSubmit { focused = nil }
+                            WalletInputField(title: L("Wallet name (optional)"), text: $name, isFocused: focus(.name), role: .name, identifier: "wallet.name").frame(minHeight: 44)
                         }.padding(.vertical, 8)
                         if nameError { Text(L("Enter a wallet name of 1–40 characters.")).foregroundStyle(Theme.warning) }
                         if mode == .privateKey {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(L("Massa S1 private key")).font(.caption).foregroundStyle(.secondary)
                                 HStack(spacing: 12) {
-                                    SecureField("Massa S1 private key", text: $key).textContentType(nil)
-                                    .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.asciiCapable)
-                                    .focused($focused, equals: .key).privacySensitive()
+                                    WalletInputField(title: L("Massa S1 private key"), text: $key, isFocused: focus(.key), role: .privateKey, identifier: "wallet.private-key", eraseContent: !privateScene)
+                                        .frame(minHeight: 44).privacySensitive()
                                     CompactPasteButton(label: L("Paste private key")) { values in
-                                        guard privateScene else { return }; key = values.first ?? ""
+                                        guard privateScene else { return }; key = (values.first ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                                     }
                                 }
                             }.padding(.vertical, 8)
+                            if !key.isEmpty && !WalletImportPresentation.validKey(key) { Text(L("Invalid Massa S1 private key. Check its format and checksum. No input was logged.")).font(.footnote).foregroundStyle(.secondary) }
                             Text(L("Validated locally. No recovery phrases or mnemonic derivation are supported.")).font(.footnote).foregroundStyle(.secondary)
                         } else if mode == .watchOnly {
                             HStack {
-                                TextField(L("Massa user address (AU)"), text: $address).focused($focused, equals: .address).textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled().keyboardType(.asciiCapable)
-                                CompactPasteButton(label: L("Paste address")) { values in guard privateScene else { return }; address = values.first ?? "" }
+                                WalletInputField(title: L("Massa user address (AU)"), text: $address, isFocused: focus(.address), role: .address, identifier: "wallet.address").frame(minHeight: 44)
+                                CompactPasteButton(label: L("Paste address")) { values in guard privateScene else { return }; address = (values.first ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
                             }
                             if !address.isEmpty && (try? MassaPublicAccount.validateUserAddress(address)) == nil { Text(L("Enter a valid Massa user address (AU)." )).font(.footnote).foregroundStyle(.secondary) }
                             Text(L("Read-only tracking. No key, signing or backup capability. Addresses do not encode a network; all queries stay on Mainnet."))
@@ -146,7 +148,7 @@ struct AddWalletView: View {
                         }
                         Button(mode == .newWallet ? L("Create wallet") : L("Add wallet")) { add() }
                             .buttonStyle(PrimaryButtonStyle())
-                            .disabled(!validName || mode == .privateKey && !WalletImportPresentation.validKey(key) || mode == .watchOnly && (try? MassaPublicAccount.validateUserAddress(address)) == nil)
+                            .disabled(!privateScene || !validName || mode == .privateKey && !WalletImportPresentation.validKey(key) || mode == .watchOnly && (try? MassaPublicAccount.validateUserAddress(address)) == nil)
                     }
                 }
                 if mode != .yaml && wallets.isBusy { Section { ProgressView(L("Authenticating…")) } }
@@ -164,7 +166,6 @@ struct AddWalletView: View {
                     if mode == .choices { dismiss() } else { mode = .choices }
                 }
             }
-            ToolbarItemGroup(placement: .keyboard) { if mode != .yaml { Spacer(); Button(L("Done")) { focused = nil } } }
         }
         .alert(L("Wallet already added"), isPresented: Binding(get: { wallets.duplicateID != nil }, set: { if !$0 { wallets.dismissDuplicate() } })) {
             Button(L("Select existing wallet")) { if let id = wallets.duplicateID { wallets.select(id); onAdded(); dismiss() } }
@@ -174,6 +175,9 @@ struct AddWalletView: View {
         .onChange(of: captured) { _, _ in updatePrivacy() }
         .onDisappear { key = ""; wallets.cancelCreation() }
     }
+    private func focus(_ field: Field) -> Binding<Bool> {
+        Binding(get: { focused == field }, set: { value in if value { focused = field } else if focused == field { focused = nil } })
+    }
     private var validName: Bool { WalletNamePresentation.validOptional(name) }
     private func menuRow(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Label(L(title), systemImage: icon).frame(maxWidth: .infinity, minHeight: 48, alignment: .leading).contentShape(Rectangle()) }
@@ -181,10 +185,12 @@ struct AddWalletView: View {
     }
     private func updatePrivacy() {
         if !privateScene { key = "" }
+        if phase == .background || captured { focused = nil }
         wallets.creationPrivacy(active: phase == .active, captured: captured, background: phase == .background)
     }
     private func add() {
         focused = nil
+        guard privateScene else { return }
         guard validName else { nameError = true; return }; nameError = false
         guard mode != .privateKey || WalletImportPresentation.validKey(key) else { return }
         if mode == .watchOnly {

@@ -75,3 +75,91 @@ struct AmountEntryField: UIViewRepresentable {
         }
     }
 }
+
+/// Stable native ownership for wallet-form fields. Ordinary labels/addresses are never secure
+/// inputs; private keys and encrypted-backup passwords retain native secure-entry protection.
+struct WalletInputField: UIViewRepresentable {
+    enum Role: Equatable { case name, address, privateKey, backupPassword
+        var secure: Bool { self == .privateKey || self == .backupPassword }
+    }
+    let title: String
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    let role: Role
+    let identifier: String
+    var next = false
+    var eraseContent = false
+    var onSubmit: @MainActor () -> Void = {}
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+    func makeUIView(context: Context) -> UITextField {
+        let field = UITextField()
+        field.delegate = context.coordinator
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        field.font = .preferredFont(forTextStyle: .body); field.adjustsFontForContentSizeCategory = true
+        field.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+        let toolbar = UIToolbar(); toolbar.sizeToFit()
+        toolbar.items = [.flexibleSpace(), UIBarButtonItem(title: L("Done"), style: .done, target: context.coordinator, action: #selector(Coordinator.done))]
+        field.inputAccessoryView = toolbar
+        context.coordinator.field = field
+        configure(field)
+        return field
+    }
+    private func configure(_ field: UITextField) {
+        // Do not toggle secure entry on normal re-renders: that can reset selection and keyboard state.
+        if field.isSecureTextEntry != role.secure { field.isSecureTextEntry = role.secure }
+        // Empty semantic content type requests no credential association; never mislabel as an OTP.
+        field.textContentType = UITextContentType(rawValue: "")
+        field.passwordRules = nil
+        field.autocapitalizationType = role == .name ? .words : .none
+        field.autocorrectionType = role == .name ? .default : .no
+        field.spellCheckingType = role == .name ? .default : .no
+        field.smartQuotesType = .no; field.smartDashesType = .no; field.smartInsertDeleteType = .no
+        field.keyboardType = role == .address || role == .privateKey ? .asciiCapable : .default
+        field.returnKeyType = next ? .next : .done
+        field.placeholder = title; field.accessibilityIdentifier = identifier; field.accessibilityLabel = title
+        if role.secure { field.accessibilityValue = L("Hidden from accessibility output") }
+        field.tintColor = UIColor(Theme.accent)
+        (field.inputAccessoryView as? UIToolbar)?.items?.last?.title = L("Done")
+    }
+    func updateUIView(_ field: UITextField, context: Context) {
+        if context.coordinator.configuredRole != role {
+            field.text = ""; configure(field); context.coordinator.configuredRole = role
+        }
+        context.coordinator.parent = self; context.coordinator.field = field
+        field.placeholder = title; field.accessibilityLabel = title; field.tintColor = UIColor(Theme.accent)
+        (field.inputAccessoryView as? UIToolbar)?.items?.last?.title = L("Done")
+        // Explicit privacy erasure wins over composition. An empty model alone must not erase
+        // an unfinished first character before an input method commits it.
+        if role.secure && eraseContent { field.text = "" }
+        else if field.markedTextRange == nil, field.text != text { field.text = text }
+        if !isFocused, field.isFirstResponder { field.resignFirstResponder() }
+        if isFocused, !field.isFirstResponder {
+            // Defer only programmatic focus, not editing: re-check current ownership before activating.
+            Task { @MainActor [weak field, weak coordinator = context.coordinator] in
+                guard let field, let coordinator, coordinator.parent.isFocused,
+                      field.window != nil, !field.isFirstResponder else { return }
+                field.becomeFirstResponder()
+            }
+        }
+    }
+    static func dismantleUIView(_ field: UITextField, coordinator: Coordinator) {
+        field.resignFirstResponder(); field.text = ""; field.delegate = nil; coordinator.field = nil
+    }
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: WalletInputField
+        var configuredRole: Role
+        weak var field: UITextField?
+        init(_ parent: WalletInputField) { self.parent = parent; configuredRole = parent.role }
+        func textFieldDidBeginEditing(_ textField: UITextField) { parent.isFocused = true }
+        func textFieldDidEndEditing(_ textField: UITextField) { parent.isFocused = false }
+        @objc func changed(_ textField: UITextField) {
+            if parent.role.secure && parent.eraseContent { textField.text = ""; parent.text = ""; return }
+            guard textField.markedTextRange == nil else { return }
+            parent.text = textField.text ?? ""
+        }
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            done(); parent.onSubmit(); return false
+        }
+        @objc func done() { field?.resignFirstResponder(); parent.isFocused = false }
+    }
+}

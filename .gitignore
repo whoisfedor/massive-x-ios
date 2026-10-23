@@ -34,6 +34,10 @@ wallet-backups/
 # Private preparation material is not product source
 AGENTS.md
 artifacts/
-screenshots/
+/screenshots/*
+!/screenshots/appicon.jpg
+!/screenshots/main.jpg
+!/screenshots/activity.jpg
+!/screenshots/settings.jpg
 MASSIVE_X_*
 node_modules/

@@ -51,6 +51,9 @@ struct MassiveXApp: App {
             .task(id: "\(fiat.currency):\(wallets.selectedID ?? "none")") {
                 if wallets.selectedID != nil { await prices.refresh(fiat.currency) }
             }
+            .task(id: phase == .active ? send.recentUnresolvedOperationID : nil) {
+                if phase == .active, let id = send.recentUnresolvedOperationID { await send.pollRecentOperation(id) }
+            }
             .task { await appIcons.migrateRemovedSelection() }
             .onAppear {
                 wallets.removalPrivacy(active: phase == .active, captured: UIScreen.main.isCaptured)

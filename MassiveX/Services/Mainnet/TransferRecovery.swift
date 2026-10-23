@@ -47,3 +47,184 @@ extension SendCoordinator {
         try file.validate(for: wallet); return file
     }
 }
+
+/// Fixed official Explorer evidence is NOT RPC finality or independent consensus proof.
+/// It can resolve only a specific matched success after a new device-owner review.
+struct HistoricalEvidence: Codable, Equatable, Sendable {
+    static let endpoint = "https://explorer-api.massa.net"
+    // The official Explorer API exposes unsigned integer nano-MAS, unlike JSON-RPC MAS strings.
+    static func amount(_ raw: String) throws -> MASAmount {
+        guard let nano = UInt64(raw), String(nano) == raw else { throw SendFailure.historicalEvidence }
+        return MASAmount(nano: nano)
+    }
+    struct Operation: Codable, Equatable, Sendable {
+        let id: String
+        let in_blocks: [String]
+        let thread: UInt8
+        let in_pool: Bool
+        let is_operation_final: Bool
+        let op_exec_status: Bool
+        let timestamp: String
+        let operation: Signed
+        struct Signed: Codable, Equatable, Sendable {
+            let id: String
+            let content_creator_pub_key: String
+            let content_creator_address: String
+            let signature: String
+            let content: Content
+        }
+        struct Content: Codable, Equatable, Sendable {
+            let fee: String
+            let expire_period: UInt64
+            let op: [String: Transaction?]
+        }
+        struct Transaction: Codable, Equatable, Sendable { let amount: String; let recipient_address: String }
+        func validate(for draft: ReviewedTransfer) throws {
+            try draft.validate()
+            let signed = operation, content = signed.content
+            // Pool membership is auxiliary metadata, not candidate/final execution evidence.
+            // MAIN.5.1 public.rs obtains it independently; the index may retain its old value.
+            guard id == draft.operationID, signed.id == id, is_operation_final, op_exec_status,
+                  thread < 32, !in_blocks.isEmpty, in_blocks.count <= 8, Set(in_blocks).count == in_blocks.count,
+                  signed.content_creator_pub_key == draft.wallet.publicKey, signed.content_creator_address == draft.wallet.address,
+                  Set(content.op.keys).isSubset(of: ["Transaction", "RollBuy", "RollSell", "ExecuteSC", "CallSC"]),
+                  let item = content.op["Transaction"], let transaction = item,
+                  content.op.allSatisfy({ $0.key == "Transaction" || $0.value == nil }),
+                  transaction.recipient_address == draft.recipient, try HistoricalEvidence.amount(transaction.amount) == draft.amount,
+                  try HistoricalEvidence.amount(content.fee) == draft.fee, content.expire_period == draft.expiry,
+                  let millis = UInt64(timestamp), millis > 0, String(millis) == timestamp,
+                  millis <= UInt64(Date().addingTimeInterval(300).timeIntervalSince1970 * 1000) else { throw SendFailure.historicalEvidence }
+            for block in in_blocks { _ = try MassaCodec.decode(block, prefix: "B") }
+            let bytes = try MassaOperationEncoding.serialized(fee: HistoricalEvidence.amount(content.fee), amount: HistoricalEvidence.amount(transaction.amount),
+                expirePeriod: content.expire_period, recipient: transaction.recipient_address)
+            let account = try MassaPublicAccount(rawPublicKey: MassaCodec.decode(signed.content_creator_pub_key, prefix: "P"))
+            guard bytes == draft.content, account.address == draft.wallet.address,
+                  try MassaOperationEncoding.operationID(content: bytes, publicKey: account.publicKey) == id,
+                  try account.verify(message: MassaOperationEncoding.canonical(content: bytes, publicKey: account.publicKey), signature: signed.signature)
+                else { throw SendFailure.historicalEvidence }
+        }
+    }
+    struct BlockEnvelope: Codable, Equatable, Sendable { let block: Block }
+    struct Block: Codable, Equatable, Sendable {
+        let hash: String
+        let is_final: Bool
+        let period: UInt64
+        let thread: UInt8
+        let block_time: String
+        let latest_ops: [Row]
+        struct Row: Codable, Equatable, Sendable {
+            let hash: String
+            let status: String
+            let type: String
+            let from: String
+            let to: String
+            let value: String
+            let transaction_fee: String
+            let op_exec_status: Bool
+        }
+        func retainingOnly(_ operationID: String) -> Self {
+            Self(hash: hash, is_final: is_final, period: period, thread: thread, block_time: block_time,
+                 latest_ops: latest_ops.filter { $0.hash == operationID })
+        }
+        func validate(for draft: ReviewedTransfer, operation: Operation) throws {
+            _ = try MassaCodec.decode(hash, prefix: "B")
+            let matches = latest_ops.filter { $0.hash == draft.operationID }
+            guard is_final, operation.in_blocks.contains(hash), thread == operation.thread, period <= draft.expiry,
+                  block_time == operation.timestamp, matches.count == 1, let row = matches.first,
+                  row.status == "Final", row.type == "Transaction", row.op_exec_status,
+                  row.from == draft.wallet.address, row.to == draft.recipient,
+                  try HistoricalEvidence.amount(row.value) == draft.amount, try HistoricalEvidence.amount(row.transaction_fee) == draft.fee else { throw SendFailure.historicalEvidence }
+        }
+    }
+    struct Report: Codable, Equatable, Sendable {
+        let endpoint: String
+        let network: String
+        let observedAt: Date
+        let operation: Operation
+        let block: Block
+    }
+    let chainID: UInt64
+    let nodeVersion: String
+    let reports: [Report]
+    func validate(for draft: ReviewedTransfer) throws {
+        guard chainID == MassaEnvironment.mainnet.chainID, MainnetProtocolCompatibility.supports(nodeVersion), reports.count == 2,
+              reports[0].operation == reports[1].operation, reports[0].block == reports[1].block,
+              reports[1].observedAt >= reports[0].observedAt else { throw SendFailure.historicalEvidence }
+        for report in reports {
+            guard report.endpoint == Self.endpoint, report.network == "mainnet" else { throw SendFailure.historicalEvidence }
+            try report.operation.validate(for: draft); try report.block.validate(for: draft, operation: report.operation)
+        }
+    }
+    func sameStatement(as other: Self) -> Bool {
+        chainID == other.chainID && nodeVersion == other.nodeVersion && reports.first?.operation == other.reports.first?.operation && reports.first?.block == other.reports.first?.block
+    }
+}
+struct HistoricalRecoveryReview: Equatable, Sendable {
+    let draft: ReviewedTransfer
+    let evidence: HistoricalEvidence
+    let reviewedAt: Date
+}
+struct OwnerHistoricalResolution: Codable, Equatable, Sendable {
+    static let policyID = "owner-reviewed-official-explorer-success-v1"
+    let policy: String
+    let authorizationMethod: String
+    let authorizedAt: Date
+    let acceptedAt: Date
+    let evidence: HistoricalEvidence
+    func validate(for draft: ReviewedTransfer) throws {
+        guard policy == Self.policyID, authorizationMethod == "deviceOwnerAuthentication",
+              (0...30).contains(acceptedAt.timeIntervalSince(authorizedAt)) else { throw SendFailure.historicalEvidence }
+        try evidence.validate(for: draft)
+        for report in evidence.reports {
+            guard report.observedAt >= authorizedAt, (0...30).contains(acceptedAt.timeIntervalSince(report.observedAt)) else { throw SendFailure.historicalEvidence }
+        }
+    }
+}
+protocol HistoricalEvidenceReading: Sendable { func evidence(for draft: ReviewedTransfer) async throws -> HistoricalEvidence }
+struct OfficialHistoricalClient: HistoricalEvidenceReading {
+    private let transport: any RPCTransport
+    init(transport: any RPCTransport = MainnetURLSessionTransport()) { self.transport = transport }
+    private struct Status: Decodable { let chain_id: UInt64; let version: String; let current_time: UInt64 }
+    private struct Envelope: Decodable { let jsonrpc: String; let id: String; let result: Status?; let error: RPCError?
+        struct RPCError: Decodable { let code: Int }
+    }
+    private func status() async throws -> Status {
+        let id = UUID().uuidString
+        var request = URLRequest(url: MassaEnvironment.mainnet.endpoint, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(TransferRequest(id: id, method: "get_status", params: [String]()))
+        let response = try await transport.send(request)
+        guard response.statusCode == 200, response.data.count <= 1_048_576 else { throw SendFailure.historicalEvidence }
+        let envelope = try JSONDecoder().decode(Envelope.self, from: response.data)
+        guard envelope.jsonrpc == "2.0", envelope.id == id, envelope.error == nil, let value = envelope.result,
+              value.chain_id == MassaEnvironment.mainnet.chainID, MainnetProtocolCompatibility.supports(value.version),
+              abs(Date().timeIntervalSince1970 - Double(value.current_time) / 1000) <= 20 else { throw SendFailure.historicalEvidence }
+        return value
+    }
+    private func get<T: Decodable>(_ path: String) async throws -> T {
+        var request = URLRequest(url: URL(string: HistoricalEvidence.endpoint + path)!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        request.httpMethod = "GET"; request.setValue("mainnet", forHTTPHeaderField: "x-network"); request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let response = try await transport.send(request)
+        guard response.statusCode == 200, response.data.count <= 1_048_576,
+              response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw SendFailure.historicalEvidence }
+        return try JSONDecoder().decode(T.self, from: response.data)
+    }
+    func evidence(for draft: ReviewedTransfer) async throws -> HistoricalEvidence {
+        try draft.validate()
+        let started = Date(), chain = try await status()
+        var reports: [HistoricalEvidence.Report] = []
+        for _ in 0..<2 {
+            try Task.checkCancellation()
+            let operation: HistoricalEvidence.Operation = try await get("/operation/" + draft.operationID)
+            try operation.validate(for: draft)
+            // Bounded first-page membership. Missing/large/unrecognized responses never authorize recovery.
+            let block: HistoricalEvidence.BlockEnvelope = try await get("/block/" + operation.in_blocks[0] + "?page=0")
+            try block.block.validate(for: draft, operation: operation)
+            reports.append(.init(endpoint: HistoricalEvidence.endpoint, network: "mainnet", observedAt: Date(), operation: operation, block: block.block.retainingOnly(draft.operationID)))
+        }
+        let end = try await status()
+        guard chain.version == end.version, Date().timeIntervalSince(started) <= 60 else { throw SendFailure.historicalEvidence }
+        let evidence = HistoricalEvidence(chainID: chain.chain_id, nodeVersion: chain.version, reports: reports)
+        try evidence.validate(for: draft); return evidence
+    }
+}

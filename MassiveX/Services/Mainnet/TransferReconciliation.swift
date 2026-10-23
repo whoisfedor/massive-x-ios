@@ -48,7 +48,7 @@ struct TrustedMassaRPCResolution: Codable, Equatable, Sendable {
 struct ReconciliationAssessment: Codable, Equatable, Sendable {
     enum Reason: String, Codable, Sendable {
         case observed, notFound, expiredHistoryUnavailable, conflictingObservations
-        case uncorroboratedTerminal, invalidEvidence, trustedMassaLabs
+        case uncorroboratedTerminal, invalidEvidence, trustedMassaLabs, ownerReviewedHistorical
     }
     let state: SubmissionState
     let reason: Reason
@@ -58,6 +58,7 @@ struct ReconciliationAssessment: Codable, Equatable, Sendable {
     var observations: [NodeObservation]? = nil
     var terminalClaims: [SubmissionState]? = nil
     var providerResolution: TrustedMassaRPCResolution? = nil
+    var historicalResolution: OwnerHistoricalResolution? = nil
 
     static func combine(_ first: SubmissionState, _ second: SubmissionState, finalPeriod: UInt64?, expiry: UInt64,
                         now: Date = Date(), operationID: String? = nil, observations: [NodeObservation] = []) -> Self {
@@ -103,7 +104,7 @@ struct ReconciliationAssessment: Codable, Equatable, Sendable {
                     reason: conflict ? .conflictingObservations : reason, checkedAt: checkedAt,
                     reportedFinalPeriod: reportedFinalPeriod, reportedState: reportedState,
                     observations: history.isEmpty ? nil : history, terminalClaims: claims.isEmpty ? nil : claims,
-                    providerResolution: conflict ? nil : providerResolution)
+                    providerResolution: conflict ? nil : providerResolution, historicalResolution: conflict ? nil : historicalResolution)
     }
     /// Interrupted submitting records keep their reports without pretending to establish a terminal result.
     func asUnresolved() -> Self {
@@ -112,17 +113,23 @@ struct ReconciliationAssessment: Codable, Equatable, Sendable {
              observations: observations, terminalClaims: terminalClaims)
     }
     func resolvedOutcome(for draft: ReviewedTransfer) -> SubmissionState? {
-        guard reason == .trustedMassaLabs, state == .finalized || state == .failed,
-              reportedState == state, let resolution = providerResolution, checkedAt == resolution.acceptedAt,
-              (try? resolution.validate(for: draft)) != nil,
-              resolution.reports.allSatisfy({ $0.observation.reportedState == state }),
+        guard state == .finalized || state == .failed, reportedState == state,
               (terminalClaims ?? []).allSatisfy({ $0 == state }),
-              (observations ?? []).allSatisfy({ $0.reportedState != .finalized && $0.reportedState != .failed || $0.reportedState == state }),
-              Array((observations ?? []).suffix(2)) == resolution.reports.map(\.observation) else { return nil }
+              (observations ?? []).allSatisfy({ $0.reportedState != .finalized && $0.reportedState != .failed || $0.reportedState == state }) else { return nil }
+        if reason == .ownerReviewedHistorical {
+            guard state == .finalized, providerResolution == nil, let receipt = historicalResolution,
+                  checkedAt == receipt.acceptedAt, (try? receipt.validate(for: draft)) != nil else { return nil }
+        } else {
+            guard reason == .trustedMassaLabs, historicalResolution == nil, let resolution = providerResolution,
+                  checkedAt == resolution.acceptedAt, (try? resolution.validate(for: draft)) != nil,
+                  resolution.reports.allSatisfy({ $0.observation.reportedState == state }),
+                  Array((observations ?? []).suffix(2)) == resolution.reports.map(\.observation) else { return nil }
+        }
         return state
     }
     var message: String {
         switch reason {
+        case .ownerReviewedHistorical: L("Accepted after your authenticated review of official Explorer evidence. This is not RPC confirmation or independent consensus verification.")
         case .trustedMassaLabs: L("Confirmed by Massa Mainnet RPC. This relies on the Massa Labs provider, not independent cryptographic verification.")
         case .observed: L("Status is reported by the Mainnet node; it is not an independent archival proof.")
         case .notFound: L("The node has no reliable historical result for this operation. Not found does not mean rejected. Do not repeat this payment.")

@@ -53,9 +53,14 @@ struct SendView: View {
                         statusContent(draft: pending.draft, kind: pending.state == .pending ? .pending : .unknown)
                         if send.busy { ProgressView() }
                         Button(L("Check status")) { Task { await send.reconcile(pending) } }.disabled(send.busy)
+                        Button(L("Review historical payment")) {
+                            send.historicalPrivacy(active: phase == .active, captured: UIScreen.main.isCaptured)
+                            Task { await send.prepareHistoricalRecovery(pending) }
+                        }.disabled(send.busy)
                         if let message = send.message { Text(message).font(.footnote).foregroundStyle(Theme.warning) }
                     } else if let receipt = send.review, let kind = SendStatusPresentation.terminal(send.phase) {
-                        statusContent(draft: receipt, kind: kind)
+                        let stored = send.pending.first { $0.draft.operationID == receipt.operationID }
+                        statusContent(draft: receipt, kind: stored?.assessment?.historicalResolution != nil ? .historical : kind)
                     } else if let review = send.review, send.phase == .review || send.phase == .awaitingAuthentication {
                         reviewContent(review)
                     } else {
@@ -66,9 +71,12 @@ struct SendView: View {
                                     TextField(L("Massa AU address"), text: $recipient, axis: .vertical)
                                         .lineLimit(2...3).font(.body).textInputAutocapitalization(.never).autocorrectionDisabled().focused($focused, equals: .recipient)
                                         .accessibilityIdentifier("send.recipient")
-                                    CompactPasteButton(label: L("Paste")) { values in recipient = values.first ?? "" }
+                                    CompactPasteButton(label: L("Paste")) { values in recipient = (values.first ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
                                     Button { dismissKeyboard(); showingRecent = true } label: { Image(systemName: "clock.arrow.circlepath").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel(L("Recent recipients"))
                                 }.frame(minHeight: 58)
+                                if !recipient.isEmpty && !SendFormPresentation.validRecipient(recipient) {
+                                    Text(L("Enter a valid Massa user address (AU).")).font(.caption).foregroundStyle(.secondary)
+                                }
                             }.surfaceCard()
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(L("Amount")).font(.caption).foregroundStyle(.secondary)
@@ -127,15 +135,21 @@ struct SendView: View {
                             .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Done")) { showingRecent = false } } }
                     }.presentationDetents([.medium, .large])
                 }
+                .sheet(isPresented: Binding(get: { send.historicalReview != nil }, set: { if !$0 { send.cancelHistoricalRecovery() } })) {
+                    if let historical = send.historicalReview { historicalContent(historical) }
+                }
+                .onAppear { send.historicalPrivacy(active: phase == .active, captured: UIScreen.main.isCaptured) }
                 .onChange(of: recipient) { _, _ in gesture.reset(); formGeneration = UUID(); maxFailure = nil; send.invalidateReview() }
                 .onChange(of: rejectedAmount) { _, _ in send.invalidateReview() }
                 .onChange(of: amount) { _, _ in rejectedAmount = false; gesture.reset(); formGeneration = UUID(); send.invalidateReview() }
                 .onChange(of: wallets.selectedID) { _, _ in dismissKeyboard(); showingRecent = false; showingCredit = false; gesture.reset(); formGeneration = UUID(); recipient = ""; amount = ""; send.select(wallet) }
                 .onChange(of: phase) { _, value in
+                    send.historicalPrivacy(active: value == .active, captured: UIScreen.main.isCaptured, background: value == .background)
                     wallets.backup?.updatePrivacy(active: value == .active, captured: UIScreen.main.isCaptured, background: value == .background)
                     if value == .background { dismissKeyboard(); showingRecent = false; showingCredit = false; gesture.reset(); send.invalidateReview() }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
+                    send.historicalPrivacy(active: phase == .active, captured: UIScreen.main.isCaptured)
                     wallets.backup?.updatePrivacy(active: phase == .active, captured: UIScreen.main.isCaptured)
                     if UIScreen.main.isCaptured { dismissKeyboard(); showingRecent = false; showingCredit = false; gesture.reset(); send.invalidateReview() }
                 }
@@ -163,7 +177,7 @@ struct SendView: View {
     private func operationDetails(_ id: String) -> some View {
         DisclosureGroup(L("Transaction details")) {
             Text(id).font(.caption.monospaced()).textSelection(.enabled)
-            Text(L("Confirmed by Massa Mainnet RPC. This relies on the Massa Labs provider, not independent cryptographic verification.")).font(.caption).foregroundStyle(.secondary)
+            Text(SendStatusPresentation.evidenceMessage(send.pending.first { $0.draft.operationID == id })).font(.caption).foregroundStyle(.secondary)
             Button(L("Copy operation ID")) { UIPasteboard.general.string = id }
             if let url = URL(string: "https://explorer.massa.net/mainnet/operation/" + id) { Link(L("Open in Massa Explorer"), destination: url) }
         }.font(.footnote)
@@ -174,14 +188,51 @@ struct SendView: View {
                 .foregroundStyle(kind == .completed ? Color.green : kind == .unknown ? Theme.warning : Color.secondary)
                 .accessibilityHidden(true)
             Text(L(kind.title)).font(.largeTitle.bold())
-            if kind == .completed {
+            if kind == .completed || kind == .historical {
                 CurrencyAmountText(parts: .formatted(number: MASUserInput.display(draft.amount, locale: liveLanguage.language.locale), currency: "MAS")).font(.title2).monospacedDigit()
                 Text(L("Recipient") + " · " + SendFormPresentation.shortAddress(draft.recipient)).font(.subheadline).foregroundStyle(.secondary)
             }
             Text(L(kind.guidance)).font(.subheadline).foregroundStyle(kind == .unknown ? Theme.warning : Color.secondary).multilineTextAlignment(.center)
             operationDetails(draft.operationID).frame(maxWidth: .infinity, alignment: .leading).surfaceCard()
+            if kind == .completed || kind == .failed || kind == .historical, let wallet, send.unresolved(wallet) == nil {
+                Button(L("New transfer")) {
+                    if send.beginNewTransfer(for: wallet) { recipient = ""; amount = ""; gesture.reset() }
+                }.buttonStyle(PrimaryButtonStyle()).disabled(send.busy)
+            }
             Button(L("Back to Wallet")) { send.invalidateReview(); dismiss() }.buttonStyle(PrimaryButtonStyle())
         }.padding(.vertical, 24).frame(maxWidth: .infinity)
+    }
+    private func historicalContent(_ historical: HistoricalRecoveryReview) -> some View {
+        NavigationStack {
+            List {
+                Section(L("Historical payment found")) {
+                    Text(L("The official Explorer reports Final and Success. Its signature and payment details match this stored intent."))
+                    Text(L("This is indexed historical evidence, not RPC confirmation or independent consensus verification. Authenticate only if you accept this specific result."))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Section {
+                    LabeledContent(L("From")) { Text(historical.draft.wallet.address).textSelection(.enabled).font(.caption.monospaced()) }
+                    LabeledContent(L("Recipient")) { Text(historical.draft.recipient).textSelection(.enabled).font(.caption.monospaced()) }
+                    LabeledContent(L("Evidence source"), value: "explorer-api.massa.net · Mainnet")
+                    LabeledContent(L("Amount"), value: historical.draft.amount.text + " MAS")
+                    LabeledContent(L("Fee"), value: historical.draft.fee.text + " MAS")
+                    Text(historical.draft.operationID).font(.caption.monospaced()).textSelection(.enabled)
+                    if let report = historical.evidence.reports.first {
+                        Text(report.block.hash).font(.caption.monospaced()).textSelection(.enabled)
+                        if let millis = UInt64(report.operation.timestamp) { Text(Date(timeIntervalSince1970: Double(millis) / 1000).formatted(.dateTime.locale(liveLanguage.language.locale))) }
+                    }
+                    Link(L("Open in Massa Explorer"), destination: URL(string: "https://explorer.massa.net/mainnet/operation/" + historical.draft.operationID)!)
+                }
+                Section {
+                    Text(L("This does not send or retry a payment.")).font(.footnote)
+                    Button(L("Authenticate and accept historical result")) { Task { await send.confirmHistoricalRecovery(historical) } }
+                        .buttonStyle(PrimaryButtonStyle()).disabled(send.busy || phase != .active || UIScreen.main.isCaptured)
+                    if send.busy { ProgressView() }
+                    if let message = send.message { Text(message).font(.footnote).foregroundStyle(.secondary) }
+                }
+            }.navigationTitle(L("Review historical payment")).navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Cancel")) { send.cancelHistoricalRecovery() } } }
+        }
     }
     private var availableText: String {
         guard let id = wallets.selectedID, wallets.balanceErrors[id] == nil,
@@ -259,7 +310,7 @@ enum SendRecentRecipients {
     static func make(_ records: [PendingTransfer], for wallet: SendWallet) -> [RecentSendRecipient] {
         var latest: [String: Date] = [:]
         for record in records where record.draft.wallet.sourceIdentity == wallet.sourceIdentity && record.state == .finalized && record.hasTrustedResolution {
-            guard let date = record.assessment?.providerResolution?.acceptedAt,
+            guard let date = (record.assessment?.providerResolution?.acceptedAt ?? record.assessment?.historicalResolution?.acceptedAt),
                   SendFormPresentation.validRecipient(record.draft.recipient) else { continue }
             latest[record.draft.recipient] = max(latest[record.draft.recipient] ?? .distantPast, date)
         }
@@ -336,16 +387,22 @@ struct SlideToSubmitControl: View {
 
 /// Presentation never upgrades an acknowledgement to final execution.
 enum SendStatusPresentation: Equatable {
-    case completed, pending, failed, unknown
+    case completed, pending, failed, unknown, historical
+    static func evidenceMessage(_ record: PendingTransfer?) -> String {
+        if let record, record.hasTrustedResolution, let assessment = record.assessment { return assessment.message }
+        if let assessment = record?.assessment, assessment.reason != .trustedMassaLabs && assessment.reason != .ownerReviewedHistorical { return assessment.message }
+        return L("Not yet confirmed by Massa Mainnet RPC.")
+    }
     static func terminal(_ phase: SendCoordinator.Phase) -> Self? {
         switch phase { case .finalized: .completed; case .failed: .failed; default: nil }
     }
-    var title: String { switch self { case .completed: "Completed"; case .pending: "Pending"; case .failed: "Not completed"; case .unknown: "Status unknown" } }
+    var title: String { switch self { case .historical: "Historical result accepted"; case .completed: "Completed"; case .pending: "Pending"; case .failed: "Not completed"; case .unknown: "Status unknown" } }
     var guidance: String { switch self {
+        case .historical: "Accepted after your authenticated review of official Explorer evidence."
         case .completed: "Confirmed on Massa Mainnet"
         case .pending: "Waiting for network confirmation"
         case .failed: "The network reported final execution failure. Check transaction details before making a new payment."
         case .unknown: "Do not send this payment again until you verify its result."
     } }
-    var symbol: String { switch self { case .completed: "checkmark.circle"; case .pending: "clock"; case .failed: "xmark.circle"; case .unknown: "questionmark.circle" } }
+    var symbol: String { switch self { case .historical: "checkmark.shield"; case .completed: "checkmark.circle"; case .pending: "clock"; case .failed: "xmark.circle"; case .unknown: "questionmark.circle" } }
 }

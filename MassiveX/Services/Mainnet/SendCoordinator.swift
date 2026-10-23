@@ -3,9 +3,10 @@ import Observation
 import Darwin
 
 enum SendFailure: Error, Equatable {
-    case journalCapacity, creationMinimum, wallet, keyUnavailable, cancelled, stale, changed, recipient, amount, funds, overflow, journal, duplicate, alreadyRecorded, response, network, privacy
+    case historicalEvidence, journalCapacity, creationMinimum, wallet, keyUnavailable, cancelled, stale, changed, recipient, amount, funds, overflow, journal, duplicate, alreadyRecorded, response, network, privacy
     var message: String {
         switch self {
+        case .historicalEvidence: L("Historical evidence is unavailable, conflicting or does not match. This payment stays locked.")
         case .journalCapacity: TransferJournalError.capacity.message
         case .creationMinimum: L("Recipient existence is unconfirmed. Send at least 0.001 MAS to cover possible account creation; this cost is deducted from the amount, not added to the fee.")
         case .wallet: L("Select a current owned Mainnet wallet with a valid public identity.")
@@ -161,6 +162,12 @@ protocol TransferNetworking: Sendable {
     private(set) var pending: [PendingTransfer] = []
     private(set) var failure: SendFailure?
     var message: String? { journalIssue?.message ?? failure?.message }
+    private(set) var historicalReview: HistoricalRecoveryReview?
+    private var historicalActive = false
+    private var historicalCaptured = false
+    @ObservationIgnored private var historicalAuthentication: (any WalletAuthenticating)?
+    private let historicalClient: any HistoricalEvidenceReading
+    private let historicalAuthenticationFactory: () -> any WalletAuthenticating
     private(set) var busy = false
     private(set) var journalIssue: TransferJournalError?
     private var blockedJournal: Bool { journalIssue != nil }
@@ -175,8 +182,11 @@ protocol TransferNetworking: Sendable {
     private let journal: any TransferJournal
     private let network: any TransferNetworking
     @ObservationIgnored private var signer: (any TransferSigning)?
-    init(network: any TransferNetworking = MainnetTransferRPC(), journal: any TransferJournal = FileTransferJournal()) {
-        self.network = network; self.journal = journal
+    init(network: any TransferNetworking = MainnetTransferRPC(), journal: any TransferJournal = FileTransferJournal(),
+         historicalClient: any HistoricalEvidenceReading = OfficialHistoricalClient(),
+         historicalAuthentication: @escaping () -> any WalletAuthenticating = { LocalWalletAuthentication() }) {
+        self.network = network; self.journal = journal; self.historicalClient = historicalClient
+        self.historicalAuthenticationFactory = historicalAuthentication
         _ = reloadJournal()
     }
     /// Explicit, validated read/write recovery; never substitutes an empty array for lost history.
@@ -188,8 +198,8 @@ protocol TransferNetworking: Sendable {
             let byID = Dictionary(uniqueKeysWithValues: loaded.map { ($0.draft.operationID, $0) })
             guard pending.allSatisfy({ byID[$0.draft.operationID]?.draft == $0.draft }) else { throw TransferJournalError.inconsistent }
             for index in loaded.indices {
-                // Every record in this store is a local intent. No trusted history ingestion exists.
-                // Legacy terminal flags and unverified role labels cannot authorize a source unlock.
+                // Every record remains a local intent; only validated terminal receipts can resolve it.
+                // Old terminal flags and the 8515bfe role cannot authorize a source unlock.
                 loaded[index].tracking = .localSubmission
                 if (loaded[index].state == .finalized || loaded[index].state == .failed), !loaded[index].hasTrustedResolution {
                     loaded[index].assessment = .retainingUnverified(loaded[index]); loaded[index].state = .outcomeUnknown
@@ -210,9 +220,10 @@ protocol TransferNetworking: Sendable {
         if let wallet, let record = unresolved(wallet) { show(record.state); review = record.draft }
     }
     func invalidateReview() {
+        historicalAuthentication?.cancel(); historicalAuthentication = nil; historicalReview = nil
         generation += 1; signer?.cancel(); signer = nil; review = nil; phase = .draft; failure = blockedJournal ? .journal : nil
     }
-    // Only a durably stored strict trusted-provider resolution releases a local intent lock.
+    // Only a durable strict RPC or explicitly owner-reviewed historical receipt resolves an intent.
     func unresolved(_ wallet: SendWallet) -> PendingTransfer? { pending.first { $0.draft.wallet.sourceIdentity == wallet.sourceIdentity && !$0.hasTrustedResolution } }
     private func requireCurrent(_ wallet: SendWallet, token: Int) throws {
         guard generation == token, selection == wallet.sourceIdentity, !Task.isCancelled else { throw SendFailure.cancelled }
@@ -290,6 +301,7 @@ protocol TransferNetworking: Sendable {
         do {
             // Not-found/unknown never unlocks a source. No resend exists.
             let assessment = try await network.reconciliation(for: record.draft)
+            guard !Task.isCancelled else { return }
             // Bare terminal flags cannot bypass strict canonical/provider validation at this boundary.
             if let resolution = assessment.providerResolution { try resolution.validate(for: record.draft, now: Date()) }
             let isTerminal = assessment.state == .finalized || assessment.state == .failed
@@ -300,10 +312,101 @@ protocol TransferNetworking: Sendable {
             let state = retained.state
             guard state != .submitting else { throw SendFailure.response }
             try save(PendingTransfer(draft: record.draft, state: state, assessment: retained))
+            if retained.resolvedOutcome(for: record.draft) != nil, historicalReview?.draft.operationID == record.draft.operationID {
+                historicalReview = nil; historicalAuthentication?.cancel(); historicalAuthentication = nil
+            }
             if generation == token, selection == record.draft.wallet.sourceIdentity, review == nil || review?.operationID == record.draft.operationID {
                 failure = nil; review = record.draft; show(state)
             }
-        } catch { if generation == token { failure = error as? SendFailure ?? .network } }
+        } catch { if generation == token, !Task.isCancelled { failure = error as? SendFailure ?? .network } }
+    }
+    func cancelHistoricalRecovery() { if historicalReview != nil || historicalAuthentication != nil { invalidateReview() } }
+    func historicalPrivacy(active: Bool, captured: Bool, background: Bool = false) {
+        historicalActive = active; historicalCaptured = captured
+        if captured || background { invalidateReview() }
+    }
+    private func historicalEligible(_ draft: ReviewedTransfer) -> Bool {
+        guard let stored = pending.first(where: { $0.draft == draft && !$0.hasTrustedResolution }) else { return false }
+        let assessment = stored.assessment
+        return assessment?.reason != .conflictingObservations &&
+            !(assessment?.terminalClaims ?? []).contains(.failed) &&
+            !(assessment?.observations ?? []).contains(where: { $0.reportedState == .failed }) &&
+            assessment?.reportedState != .failed
+    }
+    func prepareHistoricalRecovery(_ record: PendingTransfer) async {
+        guard !busy, !blockedJournal, historicalActive, !historicalCaptured,
+              selection == record.draft.wallet.sourceIdentity, historicalEligible(record.draft) else { failure = .historicalEvidence; return }
+        busy = true; failure = nil; let token = generation
+        defer { busy = false }
+        do {
+            let evidence = try await historicalClient.evidence(for: record.draft)
+            try requireCurrent(record.draft.wallet, token: token); try evidence.validate(for: record.draft)
+            guard historicalActive, !historicalCaptured else { throw SendFailure.privacy }
+            historicalReview = HistoricalRecoveryReview(draft: record.draft, evidence: evidence, reviewedAt: Date())
+        } catch { if generation == token { failure = error as? SendFailure ?? .historicalEvidence } }
+    }
+    func confirmHistoricalRecovery(_ approved: HistoricalRecoveryReview) async {
+        guard !busy, !blockedJournal, historicalReview == approved, historicalActive, !historicalCaptured,
+              selection == approved.draft.wallet.sourceIdentity, historicalEligible(approved.draft) else { failure = .historicalEvidence; return }
+        busy = true; let token = generation; let authentication = historicalAuthenticationFactory()
+        historicalAuthentication = authentication
+        defer { authentication.cancel(); historicalAuthentication = nil; busy = false }
+        do {
+            guard (0...300).contains(Date().timeIntervalSince(approved.reviewedAt)) else { throw SendFailure.stale }
+            let context = try await authentication.authorize(reason: L("Accept this historical payment result."))
+            defer { context.invalidate() }
+            // Face ID/passcode can temporarily deactivate the scene. Background/capture still revoke it.
+            for _ in 0..<20 {
+                try requireCurrent(approved.draft.wallet, token: token)
+                guard !historicalCaptured else { throw SendFailure.privacy }
+                if historicalActive { break }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            guard historicalActive, historicalReview == approved else { throw SendFailure.privacy }
+            let authorizedAt = Date()
+            let refreshed = try await historicalClient.evidence(for: approved.draft)
+            try requireCurrent(approved.draft.wallet, token: token)
+            guard historicalActive, !historicalCaptured, refreshed.sameStatement(as: approved.evidence), historicalEligible(approved.draft) else { throw SendFailure.historicalEvidence }
+            let receipt = OwnerHistoricalResolution(policy: OwnerHistoricalResolution.policyID, authorizationMethod: "deviceOwnerAuthentication",
+                authorizedAt: authorizedAt, acceptedAt: Date(), evidence: refreshed)
+            try receipt.validate(for: approved.draft)
+            let assessment = ReconciliationAssessment(state: .finalized, reason: .ownerReviewedHistorical,
+                checkedAt: receipt.acceptedAt, reportedFinalPeriod: nil, reportedState: .finalized,
+                terminalClaims: [.finalized], historicalResolution: receipt)
+                .retainingHistory(pending.first(where: { $0.draft == approved.draft })?.assessment)
+            guard assessment.resolvedOutcome(for: approved.draft) == .finalized else { throw SendFailure.historicalEvidence }
+            try save(PendingTransfer(draft: approved.draft, state: .finalized, assessment: assessment))
+            historicalReview = nil; review = approved.draft; failure = nil; phase = .finalized
+        } catch {
+            if generation == token { if let onboarding = error as? OnboardingError, case .cancelled = onboarding { failure = .cancelled }
+                else { failure = (error as? SendFailure) ?? .historicalEvidence } }
+        }
+    }
+    /// Scheduling only, never evidence of execution. Old/expired/pruned intents remain locked.
+    var recentUnresolvedOperationID: String? {
+        guard !blockedJournal else { return nil }
+        return pending.first {
+            $0.draft.wallet.sourceIdentity == selection && !$0.hasTrustedResolution &&
+            (0...600).contains(Date().timeIntervalSince($0.draft.reviewedAt))
+        }?.draft.operationID
+    }
+    /// Bounded foreground reads preserve the existing strict two-observation receipt acceptance.
+    /// This method has no signing/submission/replacement path. Cancellation stops future reads.
+    func pollRecentOperation(_ operationID: String,
+                             pause: @MainActor () async throws -> Void = { try await Task.sleep(for: .seconds(15)) }) async {
+        for attempt in 0..<4 {
+            guard !Task.isCancelled, recentUnresolvedOperationID == operationID,
+                  let record = pending.first(where: { $0.draft.operationID == operationID }) else { return }
+            if !busy { await reconcile(record) }
+            guard recentUnresolvedOperationID == operationID, attempt < 3 else { return }
+            do { try await pause() } catch { return }
+        }
+    }
+    /// Explicit navigation to a NEW draft; cannot unlock or retry an existing intent.
+    @discardableResult func beginNewTransfer(for wallet: SendWallet) -> Bool {
+        guard !busy, !blockedJournal, selection == wallet.sourceIdentity else { return false }
+        guard unresolved(wallet) == nil else { failure = .duplicate; return false }
+        invalidateReview(); return true
     }
     private func save(_ record: PendingTransfer) throws {
         var stored = record

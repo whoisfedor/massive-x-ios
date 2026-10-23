@@ -50,21 +50,27 @@ struct YAMLWalletImportForm: View {
     @State private var work: Task<Void, Never>?
     @State private var formGeneration = UUID()
     private enum Field { case name, password }
-    @FocusState private var focused: Field?
+    @State private var focused: Field?
     private var privateScene: Bool { phase == .active && !captured }
     var body: some View {
         let _ = language.language
         Section {
             if let failure = fileFailure ?? session.failure { Text(L(failure)).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("yaml.error") }
             Button { focused = nil; picking = true } label: { Label(L(document == nil ? "Choose encrypted YAML" : "Encrypted file selected"), systemImage: "doc") }
-            TextField(L("Wallet name (optional)"), text: $name).textInputAutocapitalization(.words).focused($focused, equals: .name).submitLabel(.next).onSubmit { focused = .password }
-            SecureField(L("Wallet password"), text: $password).textContentType(nil).privacySensitive().focused($focused, equals: .password).submitLabel(.done).onSubmit { focused = nil }
+            WalletInputField(title: L("Wallet name (optional)"), text: $name, isFocused: focus(.name), role: .name, identifier: "yaml.name", next: true, onSubmit: { focused = .password }).frame(minHeight: 44)
+            HStack(spacing: 12) {
+                WalletInputField(title: L("Wallet password"), text: $password, isFocused: focus(.password), role: .backupPassword, identifier: "yaml.password", eraseContent: phase == .background || captured).frame(minHeight: 44).privacySensitive()
+                CompactPasteButton(label: L("Paste password")) { values in
+                    guard privateScene else { return }
+                    // Password whitespace is significant; never trim or normalize it.
+                    password = values.first ?? ""; focused = .password
+                }.accessibilityIdentifier("yaml.paste-password")
+            }
             Text(L("Enter the password you used when creating this YAML wallet file — not a new password.")).font(.footnote).foregroundStyle(.secondary)
             Button(L("Add wallet")) { start() }.buttonStyle(PrimaryButtonStyle())
                 .disabled(document == nil || password.isEmpty || !WalletNamePresentation.validOptional(name) || session.busy || !privateScene)
             if session.busy { ProgressView(L("Authenticating…")) }
         }
-        .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button(L("Done")) { focused = nil } } }
         .fileImporter(isPresented: $picking, allowedContentTypes: [UTType(filenameExtension: "yaml") ?? .data, UTType(filenameExtension: "yml") ?? .data]) { result in
             guard phase != .background, !captured else { fileFailure = "Import cancelled. Choose the file and try again."; return }
             do {
@@ -81,6 +87,9 @@ struct YAMLWalletImportForm: View {
         .onChange(of: phase) { _, value in if value == .background { clear() } }
         .onChange(of: captured) { _, value in if value { clear() } }
         .onDisappear { clear() }
+    }
+    private func focus(_ field: Field) -> Binding<Bool> {
+        Binding(get: { focused == field }, set: { value in if value { focused = field } else if focused == field { focused = nil } })
     }
     private func clear() {
         formGeneration = UUID(); session.cancel(); work?.cancel(); work = nil; password = ""; document = nil; focused = nil
