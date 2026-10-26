@@ -19,7 +19,7 @@ enum TransferJournalPolicy {
         guard records.count <= maximumRecords else { throw TransferJournalError.capacity }
         guard Set(records.map { $0.draft.operationID }).count == records.count else { throw TransferJournalError.corrupt }
         // Migration/restoration may retain several unresolved intents for one source. Every ID is
-        // kept; the coordinator forbids any NEW intent while any of them remains unresolved.
+        // kept; exact IDs stay reserved, while independent new intents remain available.
         do {
             for record in records {
                 try record.draft.validate()

@@ -3,6 +3,7 @@ import LocalAuthentication
 import Observation
 import Security
 import UIKit
+import UniformTypeIdentifiers
 
 @MainActor protocol WalletAuthenticating {
     func authorize(reason: String) async throws -> LAContext
@@ -34,23 +35,48 @@ import UIKit
 
 /// Optional user-authorized export only. Never reads another app's clipboard contents.
 @MainActor protocol BackupClipboard {
+    var hasOwnedCopy: Bool { get }
     func write(_ key: String, expires: Date)
     func clearOwned()
 }
 
+/// Write-only content access: ownership checks never read an unknown clipboard value.
+@MainActor protocol BackupPasteboard: AnyObject {
+    var changeCount: Int { get }
+    func setItems(_ items: [[String: Any]], options: [UIPasteboard.OptionsKey: Any])
+    func clearBackupItems()
+}
+extension UIPasteboard: BackupPasteboard {
+    func clearBackupItems() { items = [] }
+}
+
 @MainActor final class LocalBackupClipboard: BackupClipboard {
     private var ownedChange: Int?
-    private let board: UIPasteboard
-    init(board: UIPasteboard = .general) { self.board = board }
+    private var ownedExpiration: Date?
+    private let board: any BackupPasteboard
+    private let now: () -> Date
+    init(board: any BackupPasteboard = UIPasteboard.general, now: @escaping () -> Date = Date.init) {
+        self.board = board; self.now = now
+    }
+    var hasOwnedCopy: Bool {
+        guard let ownedChange, let ownedExpiration, now() < ownedExpiration else { return false }
+        return board.changeCount == ownedChange
+    }
     func write(_ key: String, expires: Date) {
-        board.setItems([["public.utf8-plain-text": key]], options: [.localOnly: true, .expirationDate: expires])
-        ownedChange = board.changeCount
+        let previous = board.changeCount
+        board.setItems([[UTType.utf8PlainText.identifier: key]], options: [.localOnly: true, .expirationDate: expires])
+        let current = board.changeCount
+        // An interleaved write or an unexpected counter transition cannot grant ownership.
+        ownedChange = previous >= 0 && previous < Int.max && current == previous + 1 ? current : nil
+        ownedExpiration = expires
     }
     func clearOwned() {
-        guard let ownedChange else { return }
-        // Do not erase a newer clipboard item copied by the user.
-        if board.changeCount == ownedChange { board.items = [] }
+        let mayClear = hasOwnedCopy
         self.ownedChange = nil
+        ownedExpiration = nil
+        // UIKit provides no cross-process compare-and-clear. Check metadata immediately before
+        // this explicit write; uncertain ownership/expiry fails closed without inspecting text.
+        if mayClear { board.clearBackupItems() }
     }
 }
 
@@ -126,9 +152,9 @@ enum OnboardingError: Error {
     @ObservationIgnored private var hasExported = false
     @ObservationIgnored private var foregroundWait: CheckedContinuation<Void, any Error>?
     @ObservationIgnored private var foregroundTimeout: Task<Void, Never>?
-    @ObservationIgnored private var clipboardExpiry: Task<Void, Never>?
     private let clipboard: any BackupClipboard
-    private let revealDuration: Duration
+    static let clipboardLifetime: TimeInterval = 300
+    private let clipboardNow: () -> Date
     private let store: any TestAccountSecretStore
     private let authentication: any WalletAuthenticating
     private let metadata: any WalletMetadataStoring
@@ -138,15 +164,17 @@ enum OnboardingError: Error {
     var liveReceiveEnabled: Bool { false }
     init(store: any TestAccountSecretStore = TestAccountKeychain(service: "com.massivex.mainnet.protected-wallet.v1"),
          authentication: any WalletAuthenticating = LocalWalletAuthentication(),
-         metadata: any WalletMetadataStoring = WalletPreferences(), clipboard: any BackupClipboard = LocalBackupClipboard(), revealDuration: Duration = .seconds(30)) {
+         metadata: any WalletMetadataStoring = WalletPreferences(), clipboard: any BackupClipboard = LocalBackupClipboard(), clipboardNow: @escaping () -> Date = Date.init) {
         self.clipboard = clipboard
-        self.revealDuration = min(revealDuration, .seconds(30))
+        self.clipboardNow = clipboardNow
         self.store = store; self.authentication = authentication; self.metadata = metadata
         record = metadata.load()
     }
     func updatePrivacy(active: Bool, captured: Bool, background: Bool = false) {
         self.active = active; self.captured = captured
-        if !active || captured { conceal(); clearClipboard() }
+        if !active || captured { conceal() }
+        if captured { clearClipboard() }
+        refreshClipboardStatus()
         // A system authentication prompt may briefly make the scene inactive.
         // Actual backgrounding or capture invalidates pending authorization as well.
         if background || captured {
@@ -280,10 +308,10 @@ enum OnboardingError: Error {
     }
     func clearClipboard() {
         clipboard.clearOwned(); clipboardActive = false
-        clipboardExpiry?.cancel(); clipboardExpiry = nil
     }
+    func refreshClipboardStatus() { clipboardActive = clipboard.hasOwnedCopy }
     func copyForBackup(risksAcknowledged: Bool, clipboardConsent: Bool) async {
-        conceal(); clearClipboard()
+        conceal()
         guard risksAcknowledged && clipboardConsent else {
             message = "Copy requires acknowledgement of backup risks and explicit clipboard confirmation."
             return
@@ -291,13 +319,9 @@ enum OnboardingError: Error {
         await run { context, token in
             let account = try protectedAccount(context)
             try requirePrivacy(token)
-            clipboard.write(try account.backupPrivateKeyEncoding(), expires: Date().addingTimeInterval(30))
-            clipboardActive = true; hasExported = true
-            clipboardExpiry = Task { [weak self] in
-                do { try await Task.sleep(for: self?.revealDuration ?? .zero) } catch { return }
-                self?.clearClipboard()
-            }
-            message = "Private key copied locally for up to 30 seconds. Leaving this screen clears it. Clipboard access has risks; never paste it into chat. This is not an offline backup."
+            clipboard.write(try account.backupPrivateKeyEncoding(), expires: clipboardNow().addingTimeInterval(Self.clipboardLifetime))
+            refreshClipboardStatus(); hasExported = true
+            message = "Private key copied to this iPhone’s clipboard for up to 5 minutes. You can leave Backup to paste it. Others may read the clipboard; clear it when finished. Never paste it into chat. This is not an offline backup."
         }
     }
     func acknowledgeBackup() {

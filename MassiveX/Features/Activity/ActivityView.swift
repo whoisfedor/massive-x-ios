@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ActivityView: View {
+    @Environment(SendCoordinator.self) private var send
     @Environment(AppLanguageSettings.self) private var liveLanguage
     @Environment(HistoryPreferences.self) private var preferences
     @Environment(WalletManager.self) private var wallets
@@ -22,6 +23,21 @@ struct ActivityView: View {
                             Button(L("Load more")) { Task { await history.refresh(address, more: true) } }.disabled(history.loading.contains(address))
                         }
                     }.listRowBackground(Theme.surface)
+                    let local = send.pending.filter { $0.draft.wallet.address == address }
+                        .sorted { $0.draft.reviewedAt > $1.draft.reviewedAt }
+                    if !local.isEmpty {
+                        Section(L("Submitted from this device")) {
+                            ForEach(local, id: \.draft.operationID) { record in
+                                NavigationLink { LocalTransferDetailView(operationID: record.draft.operationID) } label: {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(L(SendStatusPresentation.history(record).title)).font(.subheadline.weight(.semibold))
+                                        Text(SendFormPresentation.shortAddress(record.draft.recipient)).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                        Text(record.draft.reviewedAt.formatted(.dateTime.locale(liveLanguage.language.locale))).font(.caption).foregroundStyle(.secondary)
+                                    }.frame(minHeight: 44)
+                                }
+                            }
+                        }.listRowBackground(Theme.surface)
+                    }
                 } else {
                     ContentUnavailableView(L("Select a wallet"), systemImage: "wallet.bifold", description: Text(L("Add or select a wallet to view its Mainnet activity.")))
                 }
@@ -291,5 +307,46 @@ struct HistoryInfoButton: View {
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button(language.text("Done")) { showing = false } } }
                 }.presentationDetents([.medium, .large])
             }
+    }
+}
+
+/// Local submission evidence is separate from the Explorer's on-chain history.
+/// Merely dismissing this screen never resolves, deletes or resubmits an operation.
+struct LocalTransferDetailView: View {
+    let operationID: String
+    @Environment(SendCoordinator.self) private var send
+    @Environment(AppLanguageSettings.self) private var language
+    @Environment(WalletState.self) private var privacy
+    @State private var refreshFailed = false
+    var body: some View {
+        let _ = language.language
+        List {
+            if let record = send.pending.first(where: { $0.draft.operationID == operationID }) {
+                let status = SendStatusPresentation.history(record)
+                Section {
+                    LabeledContent(L("Status"), value: L(status.title))
+                    Text(L(status.guidance)).font(.footnote).foregroundStyle(.secondary)
+                    Text(SendStatusPresentation.evidenceMessage(record)).font(.caption).foregroundStyle(.secondary)
+                }
+                Section {
+                    LabeledContent(L("Amount"), value: privacy.balanceHidden ? "••••" : record.draft.amount.text + " MAS")
+                    LabeledContent(L("Network fee"), value: privacy.balanceHidden ? "••••" : record.draft.fee.text + " MAS")
+                    LabeledContent(L("Recipient")) { Text(SendFormPresentation.shortAddress(record.draft.recipient)).font(.caption.monospaced()) }
+                    Text(operationID).font(.caption.monospaced()).textSelection(.enabled)
+                    Button(L("Copy operation ID")) { UIPasteboard.general.string = operationID }
+                    Link(L("Open in Massa Explorer"), destination: URL(string: "https://explorer.massa.net/mainnet/operation/" + operationID)!)
+                    Button {
+                        Task {
+                            refreshFailed = false
+                            await send.reconcile(record)
+                            refreshFailed = send.pending.first(where: { $0.draft.operationID == operationID })?.assessment?.checkedAt == record.assessment?.checkedAt
+                        }
+                    } label: { Label(L("Check status"), systemImage: "arrow.clockwise") }
+                    .disabled(send.busy || send.reconcilingIDs.contains(operationID) || record.hasTrustedResolution)
+                    if send.reconcilingIDs.contains(operationID) { ProgressView() }
+                    if refreshFailed { Text(L("Status unavailable")).font(.footnote).foregroundStyle(.secondary) }
+                }
+            }
+        }.navigationTitle(L("Transaction details")).navigationBarTitleDisplayMode(.inline)
     }
 }

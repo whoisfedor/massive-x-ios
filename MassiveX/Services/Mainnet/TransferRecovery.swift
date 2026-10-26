@@ -49,7 +49,7 @@ extension SendCoordinator {
 }
 
 /// Fixed official Explorer evidence is NOT RPC finality or independent consensus proof.
-/// It can resolve only a specific matched success after a new device-owner review.
+/// Decode/validation compatibility for receipts written by earlier app versions only.
 struct HistoricalEvidence: Codable, Equatable, Sendable {
     static let endpoint = "https://explorer-api.massa.net"
     // The official Explorer API exposes unsigned integer nano-MAS, unlike JSON-RPC MAS strings.
@@ -159,11 +159,6 @@ struct HistoricalEvidence: Codable, Equatable, Sendable {
         chainID == other.chainID && nodeVersion == other.nodeVersion && reports.first?.operation == other.reports.first?.operation && reports.first?.block == other.reports.first?.block
     }
 }
-struct HistoricalRecoveryReview: Equatable, Sendable {
-    let draft: ReviewedTransfer
-    let evidence: HistoricalEvidence
-    let reviewedAt: Date
-}
 struct OwnerHistoricalResolution: Codable, Equatable, Sendable {
     static let policyID = "owner-reviewed-official-explorer-success-v1"
     let policy: String
@@ -178,53 +173,5 @@ struct OwnerHistoricalResolution: Codable, Equatable, Sendable {
         for report in evidence.reports {
             guard report.observedAt >= authorizedAt, (0...30).contains(acceptedAt.timeIntervalSince(report.observedAt)) else { throw SendFailure.historicalEvidence }
         }
-    }
-}
-protocol HistoricalEvidenceReading: Sendable { func evidence(for draft: ReviewedTransfer) async throws -> HistoricalEvidence }
-struct OfficialHistoricalClient: HistoricalEvidenceReading {
-    private let transport: any RPCTransport
-    init(transport: any RPCTransport = MainnetURLSessionTransport()) { self.transport = transport }
-    private struct Status: Decodable { let chain_id: UInt64; let version: String; let current_time: UInt64 }
-    private struct Envelope: Decodable { let jsonrpc: String; let id: String; let result: Status?; let error: RPCError?
-        struct RPCError: Decodable { let code: Int }
-    }
-    private func status() async throws -> Status {
-        let id = UUID().uuidString
-        var request = URLRequest(url: MassaEnvironment.mainnet.endpoint, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        request.httpMethod = "POST"; request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(TransferRequest(id: id, method: "get_status", params: [String]()))
-        let response = try await transport.send(request)
-        guard response.statusCode == 200, response.data.count <= 1_048_576 else { throw SendFailure.historicalEvidence }
-        let envelope = try JSONDecoder().decode(Envelope.self, from: response.data)
-        guard envelope.jsonrpc == "2.0", envelope.id == id, envelope.error == nil, let value = envelope.result,
-              value.chain_id == MassaEnvironment.mainnet.chainID, MainnetProtocolCompatibility.supports(value.version),
-              abs(Date().timeIntervalSince1970 - Double(value.current_time) / 1000) <= 20 else { throw SendFailure.historicalEvidence }
-        return value
-    }
-    private func get<T: Decodable>(_ path: String) async throws -> T {
-        var request = URLRequest(url: URL(string: HistoricalEvidence.endpoint + path)!, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        request.httpMethod = "GET"; request.setValue("mainnet", forHTTPHeaderField: "x-network"); request.setValue("application/json", forHTTPHeaderField: "Accept")
-        let response = try await transport.send(request)
-        guard response.statusCode == 200, response.data.count <= 1_048_576,
-              response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw SendFailure.historicalEvidence }
-        return try JSONDecoder().decode(T.self, from: response.data)
-    }
-    func evidence(for draft: ReviewedTransfer) async throws -> HistoricalEvidence {
-        try draft.validate()
-        let started = Date(), chain = try await status()
-        var reports: [HistoricalEvidence.Report] = []
-        for _ in 0..<2 {
-            try Task.checkCancellation()
-            let operation: HistoricalEvidence.Operation = try await get("/operation/" + draft.operationID)
-            try operation.validate(for: draft)
-            // Bounded first-page membership. Missing/large/unrecognized responses never authorize recovery.
-            let block: HistoricalEvidence.BlockEnvelope = try await get("/block/" + operation.in_blocks[0] + "?page=0")
-            try block.block.validate(for: draft, operation: operation)
-            reports.append(.init(endpoint: HistoricalEvidence.endpoint, network: "mainnet", observedAt: Date(), operation: operation, block: block.block.retainingOnly(draft.operationID)))
-        }
-        let end = try await status()
-        guard chain.version == end.version, Date().timeIntervalSince(started) <= 60 else { throw SendFailure.historicalEvidence }
-        let evidence = HistoricalEvidence(chainID: chain.chain_id, nodeVersion: chain.version, reports: reports)
-        try evidence.validate(for: draft); return evidence
     }
 }

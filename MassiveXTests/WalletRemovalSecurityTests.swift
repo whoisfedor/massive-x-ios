@@ -240,3 +240,26 @@ extension WalletRemovalSecurityTests {
         XCTAssertFalse(cancelled); XCTAssertEqual(f.manager.activeWallets.count, before)
     }
 }
+
+extension WalletRemovalSecurityTests {
+    @MainActor func testSettingsLogoutLabelIncludesSelectedNameInAllSixLanguages() {
+        let previous = UserDefaults.standard.object(forKey: "app.language")
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: "app.language") }
+            else { UserDefaults.standard.removeObject(forKey: "app.language") }
+        }
+        for language in AppLanguage.allCases {
+            UserDefaults.standard.set(language.rawValue, forKey: "app.language")
+            let format = localized(WalletLogoutText.namedAction, language: language)
+            XCTAssertNotEqual(format, "MISSING")
+            XCTAssertEqual(format.components(separatedBy: "%@").count, 2)
+            for name in ["Savings", "Primary", "Кошелёк %@ 100%", "钱包"] {
+                let text = WalletLogoutText.settingsAction(walletName: name)
+                XCTAssertTrue(text.contains(name)); XCTAssertNotEqual(text, L(WalletLogoutText.action))
+                if language == .english { XCTAssertEqual(text, "Log out of wallet \"" + name + "\"") }
+                if language == .russian { XCTAssertEqual(text, "Выйти из кошелька \"" + name + "\"") }
+            }
+            XCTAssertEqual(WalletLogoutText.settingsAction(walletName: nil), L(WalletLogoutText.action))
+        }
+    }
+}

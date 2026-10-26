@@ -24,6 +24,10 @@ import Security
 }
 private actor MockNetwork: TransferNetworking {
     var submissions = 0, snapshots = 0, lookups = 0
+    var holdLookup = false
+    var lookupWaiter: CheckedContinuation<Void, Never>?
+    func holdStatusRead() { holdLookup = true }
+    func releaseStatusRead() { holdLookup = false; lookupWaiter?.resume(); lookupWaiter = nil }
     var timeout = false, mismatch = false, delay = false
     var result = SubmissionState.pending
     var fee: UInt64 = 10_000_000
@@ -48,7 +52,11 @@ private actor MockNetwork: TransferNetworking {
         if timeout { throw URLError(.timedOut) }
         return mismatch ? "wrong" : draft.operationID
     }
-    func lookup(operationID: String) async throws -> SubmissionState { lookups += 1; return result }
+    func lookup(operationID: String) async throws -> SubmissionState {
+        lookups += 1
+        if holdLookup { await withCheckedContinuation { lookupWaiter = $0 } }
+        return result
+    }
 }
 
 @MainActor final class SendCoordinatorTests: XCTestCase {
@@ -151,7 +159,7 @@ private actor MockNetwork: TransferNetworking {
         let recovered = SendCoordinator(network: n, journal: j); recovered.select(w)
         XCTAssertNotNil(recovered.unresolved(w))
         await recovered.prepare(wallet: w, recipient: to, amount: "1")
-        XCTAssertEqual(recovered.failure, .duplicate)
+        XCTAssertEqual(recovered.failure, .alreadyRecorded)
     }
     func testJournalFailurePreventsWriteAndLocksFurtherSending() async throws {
         let (c,n,j,s,w,to) = try setup()
@@ -169,9 +177,9 @@ private actor MockNetwork: TransferNetworking {
         let restarted = SendCoordinator(network: n, journal: j)
         restarted.select(w); await n.configure(result: .outcomeUnknown)
         await restarted.reconcile(try XCTUnwrap(j.records.first))
-        XCTAssertNotNil(restarted.unresolved(w)); XCTAssertEqual(restarted.phase, .outcomeUnknown)
+        XCTAssertNotNil(restarted.unresolved(w)); XCTAssertEqual(restarted.phase, .draft)
         await restarted.prepare(wallet: w, recipient: to, amount: "1")
-        XCTAssertEqual(restarted.message, SendFailure.duplicate.message)
+        XCTAssertEqual(restarted.message, SendFailure.alreadyRecorded.message)
         let writes = await n.submissions; XCTAssertEqual(writes, 1)
     }
     func testMalformedSubmissionResponseBecomesUnknown() async throws {
@@ -203,9 +211,9 @@ private actor MockNetwork: TransferNetworking {
         let (c,n,j,_,w,to) = try setup(); await c.prepare(wallet: w, recipient: to, amount: "1")
         j.records = [PendingTransfer(draft: try XCTUnwrap(c.review), state: .submitting)]
         let recovered = SendCoordinator(network: n, journal: j); recovered.select(w)
-        XCTAssertEqual(recovered.phase, .outcomeUnknown)
-        await n.configure(result: .pending); await recovered.reconcile(try XCTUnwrap(j.records.first)); XCTAssertEqual(recovered.phase, .pending)
-        await n.configure(result: .failed); await recovered.reconcile(try XCTUnwrap(j.records.first)); XCTAssertEqual(recovered.phase, .outcomeUnknown)
+        XCTAssertEqual(recovered.phase, .draft)
+        await n.configure(result: .pending); await recovered.reconcile(try XCTUnwrap(j.records.first)); XCTAssertEqual(recovered.phase, .draft)
+        await n.configure(result: .failed); await recovered.reconcile(try XCTUnwrap(j.records.first)); XCTAssertEqual(recovered.phase, .draft)
         XCTAssertNotNil(recovered.unresolved(w))
     }
     func testFileJournalRoundTripAndMalformedFailClosed() async throws {
@@ -305,12 +313,12 @@ extension SendCoordinatorTests {
         await c.reconcile(try XCTUnwrap(j.records.first))
         XCTAssertEqual(c.phase, .outcomeUnknown)
         await c.prepare(wallet: w, recipient: to, amount: "1")
-        XCTAssertNil(c.review); XCTAssertEqual(c.failure, .duplicate)
+        XCTAssertNil(c.review); XCTAssertEqual(c.failure, .alreadyRecorded)
         await c.confirm(approved: c.review, signer: s)
         let writes = await n.submissions; XCTAssertEqual(writes, 1)
         let restarted = SendCoordinator(network: n, journal: j); restarted.select(w)
         await restarted.prepare(wallet: w, recipient: to, amount: "1")
-        XCTAssertEqual(restarted.failure, .duplicate)
+        XCTAssertEqual(restarted.failure, .alreadyRecorded)
     }
     func testInvalidRecipientAndWalletSwitchClearOldError() async throws {
         let (c,n,_,_,w,_) = try setup()
@@ -382,12 +390,12 @@ extension SendCoordinatorTests {
                     XCTAssertEqual(migrated.pending.first?.tracking, .localSubmission)
                     XCTAssertEqual(migrated.pending.first?.assessment?.reportedState, outcome)
                     await migrated.prepare(wallet: wallet, recipient: recipient, amount: "1")
-                    XCTAssertEqual(migrated.failure, .duplicate)
+                    XCTAssertNil(migrated.failure); XCTAssertEqual(migrated.phase, .review)
                     let signer = MockSigner(originalSigner.account)
                     await migrated.confirm(approved: draft, signer: signer)
                     XCTAssertEqual(signer.calls, 0)
                     let counts = await (network.snapshots, network.submissions)
-                    XCTAssertEqual(counts.0, 0); XCTAssertEqual(counts.1, 0)
+                    XCTAssertEqual(counts.0, 1); XCTAssertEqual(counts.1, 0)
                     let restarted = SendCoordinator(network: network, journal: FileTransferJournal(url: url))
                     XCTAssertEqual(restarted.pending, migrated.pending)
                     XCTAssertEqual(restarted.unresolved(wallet)?.draft.operationID, draft.operationID)
@@ -426,7 +434,7 @@ extension SendCoordinatorTests {
                 XCTAssertEqual(restart.pending.first, saved); XCTAssertNotNil(restart.unresolved(wallet))
             }
             await migrated.prepare(wallet: wallet, recipient: recipient, amount: "2")
-            XCTAssertEqual(migrated.failure, .duplicate)
+            XCTAssertNil(migrated.failure); XCTAssertEqual(migrated.phase, .review)
             let writes = await network.submissions; XCTAssertEqual(writes, 0)
         }
     }
@@ -445,7 +453,7 @@ extension SendCoordinatorTests {
         for source in [wallet, other] {
             send.select(source); XCTAssertNotNil(send.unresolved(source))
             await send.prepare(wallet: source, recipient: recipient, amount: "3")
-            XCTAssertEqual(send.failure, .duplicate)
+            XCTAssertNil(send.failure); XCTAssertEqual(send.phase, .review)
         }
         let fresh = MassaTestAccount(), newWallet = try self.wallet(fresh), signer = MockSigner(fresh)
         send.select(newWallet); await send.prepare(wallet: newWallet, recipient: recipient, amount: "1")
@@ -523,7 +531,7 @@ extension SendCoordinatorTests {
         try restored.restorePublicOperations(file, for: wallet); XCTAssertEqual(restored.pending, original)
         let restarted = SendCoordinator(network: network, journal: journal); restarted.select(wallet)
         await restarted.prepare(wallet: wallet, recipient: recipient, amount: "2")
-        XCTAssertEqual(restarted.failure, .duplicate); XCTAssertEqual(restarted.unresolved(wallet)?.draft, draft)
+        XCTAssertNil(restarted.failure); XCTAssertEqual(restarted.phase, .review); XCTAssertEqual(restarted.unresolved(wallet)?.draft, draft)
         let writes = await network.submissions; XCTAssertEqual(writes, 0)
     }
     func testWatchAndArchivedWalletsRemainIneligibleToSign() throws {
@@ -547,10 +555,102 @@ extension SendCoordinatorTests {
         XCTAssertNotNil(send.unresolved(wallet)); XCTAssertEqual(send.pending.first?.tracking, .localSubmission)
         await network.configure(result: .finalized); await send.reconcile(try XCTUnwrap(send.pending.first))
         await send.prepare(wallet: wallet, recipient: recipient, amount: "2")
-        XCTAssertEqual(send.failure, .duplicate); XCTAssertEqual(send.pending.first?.draft, original)
+        XCTAssertNil(send.failure); XCTAssertEqual(send.phase, .review); XCTAssertEqual(send.pending.first?.draft, original)
         var forged = try XCTUnwrap(journal.records.first); forged.tracking = .historicalNodeReport
         journal.records = [forged]; XCTAssertTrue(send.reloadJournal())
         XCTAssertNotNil(send.unresolved(wallet)); XCTAssertEqual(send.pending.first?.tracking, .localSubmission)
         let writes = await network.submissions; XCTAssertEqual(writes, 0)
+    }
+}
+
+@MainActor extension SendCoordinatorTests {
+    func testUncertainHistoryAllowsNewReviewAcrossRestartSwitchAndReopenWithoutAutomaticSubmission() async throws {
+        let (c,n,j,s,w,to) = try setup()
+        await c.prepare(wallet: w, recipient: to, amount: "1")
+        let original = try XCTUnwrap(c.review)
+        await n.configure(timeout: true)
+        await c.confirm(approved: original, signer: s)
+        XCTAssertEqual(c.phase, .outcomeUnknown)
+        let restarted = SendCoordinator(network: n, journal: j)
+        restarted.select(w); XCTAssertEqual(restarted.phase, .draft); XCTAssertNil(restarted.review)
+        restarted.select(nil); restarted.select(w)
+        XCTAssertTrue(restarted.beginNewTransfer(for: w))
+        await n.setPeriod(101)
+        await restarted.prepare(wallet: w, recipient: to, amount: "1")
+        let second = try XCTUnwrap(restarted.review)
+        XCTAssertNotEqual(second.operationID, original.operationID)
+        XCTAssertTrue(restarted.hasPossibleDuplicate(second))
+        XCTAssertEqual(j.records.first?.draft, original)
+        let before = await n.submissions; XCTAssertEqual(before, 1)
+        // Only an explicitly approved new review may sign and dispatch the second operation.
+        await n.configure()
+        await restarted.confirm(approved: second, signer: s)
+        await restarted.confirm(approved: second, signer: s)
+        XCTAssertEqual(s.calls, 2)
+        let after = await n.submissions; XCTAssertEqual(after, 2)
+        XCTAssertEqual(Set(j.records.map { $0.draft.operationID }), Set([original.operationID, second.operationID]))
+        let cold = SendCoordinator(network: n, journal: j); cold.select(w)
+        XCTAssertNil(cold.review); XCTAssertEqual(cold.phase, .draft)
+        await cold.confirm(approved: second, signer: s)
+        let afterRestart = await n.submissions; XCTAssertEqual(afterRestart, 2)
+        XCTAssertEqual(j.records.first(where: { $0.draft.operationID == original.operationID })?.state, .outcomeUnknown)
+    }
+    func testHistoryRefreshCannotReplaceIndependentImmutableReview() async throws {
+        let (c,n,j,_,w,to) = try setup()
+        await c.prepare(wallet: w, recipient: to, amount: "1")
+        j.records = [PendingTransfer(draft: try XCTUnwrap(c.review), state: .outcomeUnknown)]
+        XCTAssertTrue(c.reloadJournal()); c.select(w)
+        await c.prepare(wallet: w, recipient: to, amount: "2")
+        let review = try XCTUnwrap(c.review)
+        await n.configure(result: .failed)
+        await c.reconcile(try XCTUnwrap(j.records.first))
+        XCTAssertEqual(c.review, review); XCTAssertEqual(c.phase, .review)
+        XCTAssertNil(c.failure); XCTAssertFalse(c.hasPossibleDuplicate(review))
+        let writes = await n.submissions; XCTAssertEqual(writes, 0)
+    }
+    func testUnknownHistoryAndAcknowledgementPresentationNeverInventExecution() async throws {
+        let (c,_,_,_,w,to) = try setup()
+        await c.prepare(wallet: w, recipient: to, amount: "1")
+        let draft = try XCTUnwrap(c.review)
+        for state in [SubmissionState.submitting, .pending, .outcomeUnknown, .finalized, .failed] {
+            XCTAssertEqual(SendStatusPresentation.history(PendingTransfer(draft: draft, state: state)), state == .pending ? .submitted : .unknown)
+        }
+        XCTAssertEqual(SendStatusPresentation.attempt(.pending), .submitted)
+        XCTAssertNil(SendStatusPresentation.attempt(.outcomeUnknown))
+        XCTAssertEqual(SendStatusPresentation.history(PendingTransfer(draft: draft, state: .pending,
+            assessment: .init(state: .pending, reason: .observed, checkedAt: Date(), reportedFinalPeriod: nil))), .pending)
+    }
+    func testNewPaymentWarningAllSixLanguagesAndNoHistoricalAcceptanceUI() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "Localizable", withExtension: "strings", subdirectory: nil, localization: "en"))
+        let bundle = try XCTUnwrap(Bundle(path: url.deletingLastPathComponent().path))
+        XCTAssertFalse(bundle.bundlePath.isEmpty)
+        for lang in AppLanguage.allCases {
+            let localized = try XCTUnwrap(Bundle.main.path(forResource: lang.rawValue, ofType: "lproj"))
+            let resource = try XCTUnwrap(Bundle(path: localized))
+            for key in ["Submitted", "Status unavailable", "Submitted from this device", "A previous payment to this address for this amount has an unconfirmed result. This is a new payment and could transfer funds again."] {
+                let text = resource.localizedString(forKey: key, value: "MISSING", table: nil)
+                XCTAssertNotEqual(text, "MISSING")
+                if lang != .english { XCTAssertNotEqual(text, key) }
+            }
+        }
+    }
+}
+
+@MainActor extension SendCoordinatorTests {
+    func testSlowHistoricalReadNeverLocksOrOverwritesNewPaymentReview() async throws {
+        let (c,n,j,_,w,to) = try setup()
+        await c.prepare(wallet: w, recipient: to, amount: "1")
+        j.records = [PendingTransfer(draft: try XCTUnwrap(c.review), state: .outcomeUnknown)]
+        XCTAssertTrue(c.reloadJournal()); c.select(w)
+        await n.holdStatusRead()
+        let old = try XCTUnwrap(c.pending.first)
+        let reading = Task { await c.reconcile(old) }
+        for _ in 0..<1000 { if await n.lookups > 0 { break }; await Task.yield() }
+        XCTAssertTrue(c.reconcilingIDs.contains(old.draft.operationID)); XCTAssertFalse(c.busy)
+        await c.prepare(wallet: w, recipient: to, amount: "2")
+        let fresh = try XCTUnwrap(c.review); XCTAssertEqual(c.phase, .review)
+        await n.releaseStatusRead(); await reading.value
+        XCTAssertEqual(c.review, fresh); XCTAssertEqual(c.phase, .review)
+        let submissions = await n.submissions; XCTAssertEqual(submissions, 0)
     }
 }

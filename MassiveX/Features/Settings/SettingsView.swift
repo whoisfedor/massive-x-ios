@@ -2,6 +2,11 @@ import SwiftUI
 
 enum WalletLogoutText {
     static let action = "Log out of wallet"
+    static let namedAction = "Log out of wallet \"%@\""
+    static func settingsAction(walletName: String?) -> String {
+        guard let walletName else { return L(action) }
+        return String(format: L(namedAction), locale: appLocale(), walletName)
+    }
     static let confirmationTitle = "Log out"
     static let confirmationAction = "Log out and remove local keys"
     static let incompleteTitle = "Wallet logout incomplete"
@@ -76,7 +81,7 @@ struct SettingsView: View {
                         LabeledContent(L("Environment"), value: L("Mainnet only"))
                     }
                     Section {
-                        Button(role: .destructive) { if wallets.beginRemovalReview() != nil { confirmingRemoval = true } } label: { Label(L(WalletLogoutText.action), systemImage: "trash") }
+                        Button(role: .destructive) { if wallets.beginRemovalReview() != nil { confirmingRemoval = true } } label: { Label(WalletLogoutText.settingsAction(walletName: wallets.selected?.name), systemImage: "trash") }
                             .disabled(wallets.selected == nil || wallets.isBusy)
                     }
                     Section { Text(L(SendDisclosure.text))

@@ -132,11 +132,9 @@ struct ReconciliationAssessment: Codable, Equatable, Sendable {
         case .ownerReviewedHistorical: L("Accepted after your authenticated review of official Explorer evidence. This is not RPC confirmation or independent consensus verification.")
         case .trustedMassaLabs: L("Confirmed by Massa Mainnet RPC. This relies on the Massa Labs provider, not independent cryptographic verification.")
         case .observed: L("Status is reported by the Mainnet node; it is not an independent archival proof.")
-        case .notFound: L("The node has no reliable historical result for this operation. Not found does not mean rejected. Do not repeat this payment.")
-        case .expiredHistoryUnavailable: L("The node reports execution past expiry, but the historical outcome is unverified. It may already have executed. Keep this operation locked and seek archival confirmation.")
-        case .conflictingObservations: L("Mainnet observations disagree. The original operation remains locked. Obtain reliable archival evidence before considering another payment.")
-        case .uncorroboratedTerminal: L("The stored terminal report has not passed the Massa Labs RPC checks. Keep this payment locked until its original operation can be checked.")
-        case .invalidEvidence: L("The operation evidence is stale or inconsistent. No source lock was released.")
+        case .notFound, .expiredHistoryUnavailable: L("Confirmation is unavailable. This payment may have executed. A new payment could transfer funds again.")
+        case .conflictingObservations: L("The available reports disagree. This payment's result is unconfirmed.")
+        case .uncorroboratedTerminal, .invalidEvidence: L("The saved report does not establish this payment's result.")
         }
     }
 }

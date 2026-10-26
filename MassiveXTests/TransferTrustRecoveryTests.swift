@@ -53,12 +53,12 @@ private actor HostileStatus: TransferNetworking {
             journal.records = [original]
             let send = SendCoordinator(network: network, journal: journal); send.select(original.draft.wallet)
             await send.reconcile(original)
-            XCTAssertEqual(send.phase, .outcomeUnknown)
+            XCTAssertEqual(send.phase, .draft); XCTAssertEqual(send.pending.first?.state, .outcomeUnknown)
             XCTAssertEqual(send.pending.first?.assessment?.reportedState, state)
             XCTAssertNotNil(send.unresolved(original.draft.wallet))
             let restart = SendCoordinator(network: network, journal: journal); restart.select(original.draft.wallet)
             await restart.prepare(wallet: original.draft.wallet, recipient: original.draft.recipient, amount: "0.000000001")
-            XCTAssertEqual(restart.failure, .duplicate)
+            XCTAssertEqual(restart.failure, .network); XCTAssertEqual(restart.phase, .draft)
             let writes = await network.writes; XCTAssertEqual(writes, 0)
         }
     }
@@ -169,7 +169,7 @@ private actor HostileStatus: TransferNetworking {
         XCTAssertEqual(send.pending.map(\.draft), [existing.draft, original.draft]); XCTAssertFalse(send.hasCreationBinding(imported))
         let restart = SendCoordinator(network: network, journal: journal); restart.select(imported)
         await restart.prepare(wallet: imported, recipient: imported.address, amount: "0.000000001")
-        XCTAssertEqual(restart.failure, .duplicate); XCTAssertEqual(restart.pending.count, 2)
+        XCTAssertEqual(restart.failure, .network); XCTAssertEqual(restart.phase, .draft); XCTAssertEqual(restart.pending.count, 2)
         try restart.restorePublicOperations(file, for: imported); XCTAssertEqual(restart.pending.count, 2)
         let writes = await network.writes; XCTAssertEqual(writes, 0)
     }

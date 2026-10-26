@@ -72,11 +72,13 @@ struct WalletOnboardingView: View {
             }
             Button(L("Cancel"), role: .cancel) {}
         } message: {
-            Text(L("Clipboard contents can be exposed to other apps or clipboard tools. This copy requests device-local storage and a 30-second expiry, but clearing cannot revoke copies obtained elsewhere. Never paste the key into chat. Copying alone is not an offline backup."))
+            Text(L("Copy only to this iPhone’s clipboard with a 5-minute system expiration. Leaving Backup or switching apps does not clear it. Other apps may read or keep pasted content; expiration cannot revoke those copies. Never paste a key into chat. Copying is not an offline backup."))
         }
         .onAppear { updatePrivacy() }
         .onChange(of: phase) { _, _ in updatePrivacy() }
         .onChange(of: captured) { _, _ in updatePrivacy() }
+        .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.changedNotification)) { _ in wallet.refreshClipboardStatus() }
+        .onReceive(NotificationCenter.default.publisher(for: UIPasteboard.removedNotification)) { _ in wallet.refreshClipboardStatus() }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.userDidTakeScreenshotNotification)) { _ in
             wallet.screenshotDetected()
         }

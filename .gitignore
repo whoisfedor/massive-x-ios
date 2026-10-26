@@ -35,10 +35,6 @@ wallet-backups/
 AGENTS.md
 artifacts/
 /screenshots/*
-!/screenshots/appicon.jpg
-!/screenshots/main.jpg
-!/screenshots/activity.jpg
-!/screenshots/settings.jpg
 !/screenshots/mainios.png
 MASSIVE_X_*
 node_modules/

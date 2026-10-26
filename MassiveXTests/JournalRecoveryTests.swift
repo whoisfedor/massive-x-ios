@@ -38,8 +38,8 @@ private actor P1Network: TransferNetworking {
             XCTAssertTrue(coordinator.reloadJournal()); XCTAssertNil(coordinator.journalIssue)
             XCTAssertEqual(coordinator.unresolved(record.draft.wallet)?.draft.operationID, record.draft.operationID)
             await coordinator.prepare(wallet: record.draft.wallet, recipient: record.draft.recipient, amount: "0.000000001")
-            XCTAssertEqual(coordinator.failure, .duplicate)
-            let counts = await (network.snapshots, network.submissions); XCTAssertEqual(counts.0, 0); XCTAssertEqual(counts.1, 0)
+            XCTAssertEqual(coordinator.failure, .network)
+            let counts = await (network.snapshots, network.submissions); XCTAssertEqual(counts.0, 1); XCTAssertEqual(counts.1, 0)
         }
     }
     func testMissingAnchoredOrCorruptJournalCannotBecomeEmptyOnReload() throws {

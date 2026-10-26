@@ -98,12 +98,24 @@ enum EcosystemLinks {
 }
 
 enum AppIconChoice: String, CaseIterable, Identifiable {
+    // Keep the legacy Swift case name for Crimson004; defaultChoice denotes the OS primary.
     case icon001 = "001", icon002 = "002", icon003 = "003", primary = "004"
     var id: String { rawValue }
-    var iconName: String? { self == .primary ? nil : "MassiveXIcon" + rawValue }
+    static var defaultChoice: Self { .icon001 }
+    var iconName: String? {
+        switch self {
+        case .icon001: nil
+        case .primary: "MassiveXIcon004"
+        case .icon002, .icon003: "MassiveXIcon" + rawValue
+        }
+    }
     var previewName: String { "IconPreview" + rawValue }
     var titleKey: String { switch self { case .icon001: "Classic"; case .icon002: "Midnight"; case .icon003: "Aureum"; case .primary: "Crimson" } }
-    static func selected(_ name: String?) -> Self { allCases.first { $0.iconName == name } ?? .primary }
+    static func selected(_ name: String?) -> Self {
+        // Retain the former explicitly selected Classic identifier as a compatible alias.
+        if name == "MassiveXIcon001" { return .icon001 }
+        return allCases.first { $0.iconName == name } ?? .defaultChoice
+    }
 }
 @MainActor protocol AppIconSwitching {
     var supported: Bool { get }
@@ -127,8 +139,8 @@ enum AppIconChoice: String, CaseIterable, Identifiable {
     private(set) var busy = false
     private(set) var failed = false
     var supported: Bool { system.supported }
-    var hasSupportedSelection: Bool { AppIconChoice.allCases.contains { $0.iconName == system.current } }
-    func migrateRemovedSelection() async { if supported, !hasSupportedSelection { await select(.primary) } }
+    var hasSupportedSelection: Bool { system.current == "MassiveXIcon001" || AppIconChoice.allCases.contains { $0.iconName == system.current } }
+    func migrateRemovedSelection() async { if supported, !hasSupportedSelection { await select(.defaultChoice) } }
     init(system: any AppIconSwitching = SystemAppIconSwitcher()) { self.system = system; selected = .selected(system.current) }
     func refresh() { selected = .selected(system.current) }
     func select(_ choice: AppIconChoice) async {
@@ -163,7 +175,7 @@ struct AppIconSettingsView: View {
                     }
                 }
                 if settings.busy { ProgressView() }
-                if !settings.hasSupportedSelection { Button(L("Restore default icon")) { Task { await settings.select(.primary) } } }
+                if !settings.hasSupportedSelection { Button(L("Restore default icon")) { Task { await settings.select(.defaultChoice) } } }
                 if !settings.supported { Text(L("Alternate icons are unavailable on this device.")) }
                 if settings.failed { Text(L("The app icon could not be changed. Your current icon was kept. Try again.")) .foregroundStyle(Theme.warning) }
             }.padding(20)

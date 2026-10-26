@@ -2,7 +2,7 @@
 
 A native SwiftUI wallet for Massa Mainnet. iPhone, iOS 17 or later.
 
-Source version **0.7.5 (18)**, verified locally. This source publication does not indicate Apple approval or TestFlight availability.
+Source version **0.7.5 (23)**, verified locally. This source publication does not indicate Apple approval or TestFlight availability.
 
 ## Preview
 
@@ -25,6 +25,14 @@ Independent community wallet; not affiliated with or endorsed by Massa Labs.
 - Mainnet balances, native receive QR/copy/share, real operation history, exact MAS amount entry, fee-aware Max, immutable transfer review and deliberate slide-to-submit confirmation.
 - Standard Debug and Release Mainnet Send with protected local signing, durable pending records, duplicate prevention and conservative reconciliation. No automatic retransmission of ambiguous operations. New AU recipients are supported subject to verified account-creation costs; unsupported recipient types remain blocked.
 - Fiat/crypto estimates, theme and accent preferences, alternate app icons, localized settings, privacy-safe local balance-change notifications, and external exchange/ecosystem links.
+
+## What's changed in build 23
+
+- Normal Send is no longer blocked by unrelated older payments with uncertain outcomes.
+- Older local attempts remain visible in Activity, with read-only **Status unavailable** when confirmation cannot be established.
+- Durable duplicate protection for the exact same signed operation remains. A distinct newly reviewed and authenticated payment is allowed even when an earlier payment is unresolved; there is no automatic retry.
+- **Take care with repeated amounts and recipients:** another distinct approved payment can also execute and transfer funds again.
+- Focused mocked regressions passed (211 distinct latest results across runs; final affected rerun 78/78). This change did not include a live Mainnet transfer test or an independent security audit.
 
 ## Build
 
@@ -59,7 +67,7 @@ Use a new output directory each time. This does not install or launch the shippi
 
 Mainnet JSON-RPC: `https://mainnet.massa.net/api/v2`, chain ID 77658377. Strictly matching final execution reports from this official Massa Labs provider are accepted operationally only after durable terminal-resolution storage. This is **trust in the provider**, not independent cryptographic verification. Missing/pruned/speculative data, request failure and expiry alone do not resolve an ambiguous payment.
 
-For a pruned successful basic MAS operation, a separate explicit historical review can accept two matching official Explorer reports and finalized-block membership only after exact canonical operation/signature checks, fresh device-owner authentication, post-authentication revalidation and durable source-bound storage. This is owner-accepted indexed evidence, not RPC confirmation or independent consensus verification. Missing, failed, contradictory or mismatched evidence stays locked. Every new payment still requires fresh review and protected authorization; historical recovery never resubmits an old operation.
+Older unconfirmed local attempts do not block independent new payments. Their status remains available read-only in Activity; unavailable confirmation is not proof of failure. The same recorded operation ID is never submitted again. Every distinct payment requires a fresh review and protected authorization; changing the operation can result in an additional transfer.
 
 Address history uses the official explorer indexer at `https://explorer-api.massa.net`; its contract is unversioned and is not a complete independent chain proof. Quote providers include CoinGecko and Frankfurter; coverage and freshness vary. Public addresses are sent to network services when their data is requested. No private key is sent to them. External exchange links do not connect exchange accounts or transfer funds automatically.
 
@@ -73,4 +81,4 @@ See [vendored dependency versions, licenses and checksums](Vendor/README.md). Th
 
 ## Source snapshot
 
-This public tree exports development snapshot `97147f41a08d92db39951185487efd4656cfb2be`, including the input fixes in `64bf510` and authenticated historical recovery in `474a2d7`. These provenance identifiers are distinct from this public repository’s commit history and from Apple build or release records. Private development history, signing overrides and internal verification material are not included.
+This public tree exports development snapshot `028c451efaae0f3a91624e835f3789d267dfadad`, version **0.7.5 (23)**. These provenance identifiers are distinct from this public repository’s commit history and from Apple build or release records. Private development history, signing overrides and internal verification material are not included.

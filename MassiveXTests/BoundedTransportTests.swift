@@ -145,6 +145,6 @@ final class BoundedTransportTests: XCTestCase {
         await recovered.reconcile(try XCTUnwrap(recovered.unresolved(wallet)))
         XCTAssertEqual(recovered.unresolved(wallet)?.draft.operationID, draft.operationID)
         await recovered.prepare(wallet: wallet, recipient: draft.recipient, amount: "1")
-        XCTAssertEqual(recovered.failure, .duplicate)
+        XCTAssertEqual(recovered.failure, .alreadyRecorded)
     }
 }

@@ -48,12 +48,13 @@ import UIKit
     var expiration: Date?
     var writes = 0
     func write(_ key: String, expires: Date) { value = key; expiration = expires; writes += 1 }
+    var hasOwnedCopy: Bool { value != nil }
     func clearOwned() { value = nil }
 }
 
 final class OnboardingTests: XCTestCase {
-    @MainActor private func model(_ store: ProbeSecretStore, _ auth: ProbeAuthentication = ProbeAuthentication(), _ metadata: ProbeMetadata = ProbeMetadata(), duration: Duration = .seconds(30), clipboard: ProbeClipboard = ProbeClipboard()) -> WalletOnboarding {
-        let model = WalletOnboarding(store: store, authentication: auth, metadata: metadata, clipboard: clipboard, revealDuration: duration)
+    @MainActor private func model(_ store: ProbeSecretStore, _ auth: ProbeAuthentication = ProbeAuthentication(), _ metadata: ProbeMetadata = ProbeMetadata(), clipboard: ProbeClipboard = ProbeClipboard(), now: @escaping () -> Date = Date.init) -> WalletOnboarding {
+        let model = WalletOnboarding(store: store, authentication: auth, metadata: metadata, clipboard: clipboard, clipboardNow: now)
         model.updatePrivacy(active: true, captured: false)
         return model
     }
@@ -128,7 +129,7 @@ final class OnboardingTests: XCTestCase {
         XCTAssertNil(restarted.revealedKey)
         XCTAssertEqual(store.writes, 2)
     }
-    @MainActor func testClipboardRequiresConsentAndFreshAuthenticationAndClearsOnPrivacy() async throws {
+    @MainActor func testClipboardRequiresConsentAndFreshAuthenticationSurvivesNavigationAndClearsOnCapture() async throws {
         let store = ProbeSecretStore(), auth = ProbeAuthentication(), board = ProbeClipboard()
         let state = model(store, auth, clipboard: board)
         await state.create()
@@ -145,14 +146,15 @@ final class OnboardingTests: XCTestCase {
         await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
         XCTAssertTrue(board.value == (try MassaTestAccount(seed: XCTUnwrap(store.data)).backupPrivateKeyEncoding()))
         XCTAssertTrue(state.clipboardActive)
-        XCTAssertTrue(try XCTUnwrap(board.expiration).timeIntervalSince(before) <= 31)
+        XCTAssertTrue(try XCTUnwrap(board.expiration).timeIntervalSince(before) <= 301)
         XCTAssertTrue(try XCTUnwrap(board.expiration) > before)
         XCTAssertNil(state.revealedKey)
         state.acknowledgeBackup()
         XCTAssertTrue(state.record!.backupAcknowledged)
         XCTAssertNotNil(board.value)
         state.updatePrivacy(active: false, captured: false)
-        XCTAssertNil(board.value); XCTAssertFalse(state.clipboardActive)
+        XCTAssertNotNil(board.value); XCTAssertTrue(state.clipboardActive)
+        state.close(); XCTAssertNotNil(board.value)
         state.updatePrivacy(active: true, captured: false)
         await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
         state.screenshotDetected()
@@ -161,15 +163,16 @@ final class OnboardingTests: XCTestCase {
         await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
         XCTAssertNil(board.value)
     }
-    @MainActor func testClipboardExpiresAndFreshRecoveryChecksPastedValue() async throws {
+    @MainActor func testClipboardIsNotClearedByTheOldRevealTimerAndFreshRecoveryChecksPastedValue() async throws {
         let store = ProbeSecretStore(), board = ProbeClipboard()
-        let state = model(store, duration: .milliseconds(1), clipboard: board)
+        let state = model(store, clipboard: board)
         await state.create()
         await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
         let input = try XCTUnwrap(board.value)
         state.acknowledgeBackup()
         try? await Task.sleep(for: .milliseconds(50))
-        XCTAssertNil(board.value); XCTAssertFalse(state.clipboardActive)
+        XCTAssertNotNil(board.value); XCTAssertTrue(state.clipboardActive)
+        state.clearClipboard(); XCTAssertNil(board.value)
         await state.verifyRecovery(input)
         XCTAssertTrue(state.recoveryVerified)
         XCTAssertFalse(state.liveReceiveEnabled)
@@ -279,7 +282,7 @@ final class OnboardingTests: XCTestCase {
         state.conceal()
     }
     @MainActor func testRevealHasNoForcedTimeoutAndScreenshotConceals() async {
-        let state = model(ProbeSecretStore(), duration: .milliseconds(1))
+        let state = model(ProbeSecretStore())
         await state.create(); await state.reveal(risksAcknowledged: true)
         try? await Task.sleep(for: .milliseconds(50))
         XCTAssertNotNil(state.revealedKey)
@@ -467,5 +470,161 @@ final class WalletManagerTests: XCTestCase {
         let added = await manager.addOwned(active: true, captured: false)
         XCTAssertFalse(added); XCTAssertTrue(registry.entries.isEmpty)
         XCTAssertTrue(prefs.data(forKey: "mainnet.wallet-catalog.v1") == invalid)
+    }
+}
+
+/// Content exists only in this disposable memory double; the production adapter cannot read it.
+@MainActor private final class RecordingBackupPasteboard: BackupPasteboard {
+    var changeCount = 0
+    var items: [[String: Any]] = []
+    var options: [UIPasteboard.OptionsKey: Any] = [:]
+    var clears = 0
+    var jump = 1
+    func setItems(_ items: [[String: Any]], options: [UIPasteboard.OptionsKey: Any]) {
+        self.items = items; self.options = options; changeCount += jump
+    }
+    func clearBackupItems() { items = []; changeCount += 1; clears += 1 }
+    func foreignCopy() { items = [["public.utf8-plain-text": "UNRELATED PUBLIC MARKER"]]; changeCount += 1 }
+}
+
+extension OnboardingTests {
+    @MainActor func testCopyUsesExactlyFiveMinuteSystemOptionsAndSurvivesPrivacyTransitions() async throws {
+        let store = ProbeSecretStore(), auth = ProbeAuthentication(), board = RecordingBackupPasteboard()
+        var clock = Date(timeIntervalSince1970: 1_800_000_000)
+        let clipboard = LocalBackupClipboard(board: board, now: { clock })
+        let state = WalletOnboarding(store: store, authentication: auth, metadata: ProbeMetadata(), clipboard: clipboard, clipboardNow: { clock })
+        state.updatePrivacy(active: true, captured: false); await state.create()
+        await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+        XCTAssertEqual(board.items.count, 1); XCTAssertEqual(Set(try XCTUnwrap(board.items.first).keys), ["public.utf8-plain-text"])
+        let expected = try MassaTestAccount(seed: XCTUnwrap(store.data)).backupPrivateKeyEncoding()
+        XCTAssertTrue(board.items.first?["public.utf8-plain-text"] as? String == expected)
+        XCTAssertEqual(board.options[.localOnly] as? Bool, true)
+        XCTAssertEqual(board.options[.expirationDate] as? Date, clock.addingTimeInterval(300))
+        XCTAssertNil(state.revealedKey)
+        await state.reveal(risksAcknowledged: true); XCTAssertNotNil(state.revealedKey)
+        state.updatePrivacy(active: false, captured: false, background: true)
+        XCTAssertNil(state.revealedKey); XCTAssertEqual(board.clears, 0); XCTAssertTrue(clipboard.hasOwnedCopy)
+        state.updatePrivacy(active: true, captured: false); XCTAssertNil(state.revealedKey)
+        state.close(); XCTAssertEqual(board.clears, 0)
+        state.updatePrivacy(active: true, captured: false)
+        clock = clock.addingTimeInterval(60)
+        await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+        XCTAssertEqual(board.options[.expirationDate] as? Date, clock.addingTimeInterval(300))
+        auth.failure = .cancelled
+        await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+        XCTAssertTrue(clipboard.hasOwnedCopy); XCTAssertEqual(board.clears, 0)
+        state.clearClipboard(); XCTAssertEqual(board.clears, 1); XCTAssertTrue(board.items.isEmpty)
+    }
+    @MainActor func testOwnershipRejectsOtherCopiesExpiredSessionsAndAmbiguousCounters() {
+        let board = RecordingBackupPasteboard(); var clock = Date()
+        let first = LocalBackupClipboard(board: board, now: { clock }), second = LocalBackupClipboard(board: board, now: { clock })
+        first.write("PUBLIC MARKER ONE", expires: clock.addingTimeInterval(300))
+        second.write("PUBLIC MARKER TWO", expires: clock.addingTimeInterval(300))
+        first.clearOwned(); XCTAssertEqual(board.clears, 0); XCTAssertTrue(second.hasOwnedCopy)
+        board.foreignCopy(); second.clearOwned(); XCTAssertEqual(board.clears, 0); XCTAssertFalse(board.items.isEmpty)
+        first.write("PUBLIC MARKER ONE", expires: clock.addingTimeInterval(300))
+        clock = clock.addingTimeInterval(300)
+        XCTAssertFalse(first.hasOwnedCopy); first.clearOwned(); XCTAssertEqual(board.clears, 0)
+        board.foreignCopy(); XCTAssertEqual(board.clears, 0)
+        board.jump = 2
+        first.write("PUBLIC MARKER ONE", expires: clock.addingTimeInterval(300))
+        XCTAssertFalse(first.hasOwnedCopy); first.clearOwned(); XCTAssertEqual(board.clears, 0)
+    }
+    @MainActor func testModelDeallocationDoesNotClearSystemCopyAndNoSecretEntersMetadata() async throws {
+        let board = RecordingBackupPasteboard(), store = ProbeSecretStore(), metadata = ProbeMetadata()
+        let clipboard = LocalBackupClipboard(board: board)
+        var state: WalletOnboarding? = WalletOnboarding(store: store, authentication: ProbeAuthentication(), metadata: metadata, clipboard: clipboard)
+        state?.updatePrivacy(active: true, captured: false); await state?.create()
+        await state?.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+        let expected = try MassaTestAccount(seed: XCTUnwrap(store.data)).backupPrivateKeyEncoding()
+        let encoded = try JSONEncoder().encode(XCTUnwrap(metadata.record))
+        XCTAssertFalse(String(decoding: encoded, as: UTF8.self).contains(expected))
+        XCTAssertFalse(String(describing: state!).contains(expected))
+        state?.close(); state = nil
+        XCTAssertTrue(clipboard.hasOwnedCopy); XCTAssertEqual(board.clears, 0)
+    }
+    @MainActor func testCopyAuthenticationBackgroundCancellationDenialAndCaptureNeverWrite() async {
+        for failure in [OnboardingError.cancelled, .authentication] {
+            let board = ProbeClipboard(), auth = ProbeAuthentication()
+            let subject = model(ProbeSecretStore(), auth, clipboard: board)
+            await subject.create(); auth.failure = failure
+            await subject.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+            XCTAssertEqual(board.writes, 0); XCTAssertNil(subject.revealedKey)
+        }
+        let board = ProbeClipboard(), auth = ProbeAuthentication(), state = model(ProbeSecretStore(), auth, clipboard: board)
+        await state.create(); let calls = auth.calls; auth.pause = true
+        let copy = Task { await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true) }
+        while auth.calls == calls { await Task.yield() }
+        state.close(); await copy.value; XCTAssertEqual(board.writes, 0)
+        state.updatePrivacy(active: true, captured: true)
+        await state.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+        XCTAssertEqual(board.writes, 0)
+    }
+    @MainActor func testAnonymousUIKitBoardSystemExpirationAndReplacementSurviveAppObjects() async throws {
+        // Only public markers on a named temporary board; never read or write .general in tests.
+        let board = UIPasteboard.withUniqueName(); defer { UIPasteboard.remove(withName: board.name) }
+        var adapter: LocalBackupClipboard? = LocalBackupClipboard(board: board)
+        adapter?.write("PUBLIC EXPIRING MARKER", expires: Date().addingTimeInterval(0.5))
+        XCTAssertTrue(board.string == "PUBLIC EXPIRING MARKER")
+        adapter = nil
+        try await Task.sleep(for: .seconds(1))
+        // iOS may deliver expiration asynchronously; bounded polling is evidence, not a hard realtime promise.
+        for _ in 0..<30 { if !board.hasStrings { break }; try await Task.sleep(for: .milliseconds(100)) }
+        guard !board.hasStrings else { throw XCTSkip("Named pasteboard expiration not observed within bounded window on this runtime; general-board expiry requires device smoke check.") }
+        let second = LocalBackupClipboard(board: board)
+        second.write("PUBLIC EXPIRING MARKER", expires: Date().addingTimeInterval(0.5))
+        board.string = "UNRELATED PUBLIC MARKER"
+        try await Task.sleep(for: .seconds(1))
+        XCTAssertTrue(board.string == "UNRELATED PUBLIC MARKER")
+        second.clearOwned(); XCTAssertTrue(board.string == "UNRELATED PUBLIC MARKER")
+    }
+    func testFiveMinuteBackupCopyMessagingInAllSixLanguages() throws {
+        let keys = [
+            "Private key copied to this iPhone’s clipboard for up to 5 minutes. You can leave Backup to paste it. Others may read the clipboard; clear it when finished. Never paste it into chat. This is not an offline backup.",
+            "Copy only to this iPhone’s clipboard with a 5-minute system expiration. Leaving Backup or switching apps does not clear it. Other apps may read or keep pasted content; expiration cannot revoke those copies. Never paste a key into chat. Copying is not an offline backup."
+        ]
+        for language in AppLanguage.allCases {
+            let bundle = try XCTUnwrap(Bundle(path: XCTUnwrap(Bundle.main.path(forResource: language.rawValue, ofType: "lproj"))))
+            for key in keys { XCTAssertNotEqual(bundle.localizedString(forKey: key, value: "MISSING", table: nil), "MISSING") }
+        }
+    }
+}
+extension WalletManagerTests {
+    @MainActor func testWalletSwitchRetainsOwnClipboardSessionWithoutClearingAnotherWalletCopy() async throws {
+        let (prefs, suite) = preferences(); defer { prefs.removePersistentDomain(forName: suite) }
+        let registry = WalletStoreRegistry(), fixtures = try safeTestVectors()
+        let board = UIPasteboard.withUniqueName(); defer { UIPasteboard.remove(withName: board.name) }
+        let manager = WalletManager(defaults: prefs, stores: { registry.store($0) }, authentication: { ProbeAuthentication() },
+            clipboardFactory: { _ in LocalBackupClipboard(board: board) }, client: WalletBalanceProbe(), balanceChanged: { _, _ in }, walletsRemoved: { _ in })
+        for fixture in fixtures { let added = await manager.addOwned(privateKey: fixture.privateKey, active: true, captured: false); XCTAssertTrue(added) }
+        let first = manager.wallets[0].id, second = manager.wallets[1].id
+        manager.select(first); let original = try XCTUnwrap(manager.backup)
+        original.updatePrivacy(active: true, captured: false)
+        await original.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+        await original.reveal(risksAcknowledged: true)
+        manager.select(second); XCTAssertNil(original.revealedKey); XCTAssertTrue(board.string == fixtures[0].privateKey)
+        manager.select(first); let reopened = try XCTUnwrap(manager.backup)
+        reopened.updatePrivacy(active: true, captured: false); XCTAssertTrue(reopened.clipboardActive)
+        manager.select(second); let other = try XCTUnwrap(manager.backup)
+        other.updatePrivacy(active: true, captured: false); await other.copyForBackup(risksAcknowledged: true, clipboardConsent: true)
+        original.clearClipboard(); XCTAssertTrue(board.string == fixtures[1].privateKey)
+        other.clearClipboard(); XCTAssertFalse(board.hasStrings)
+    }
+}
+
+extension OnboardingTests {
+    @MainActor func testNativeClipboardOwnershipSurvivesEventTurnsAndRejectsNewerCopy() async throws {
+        let board = UIPasteboard.withUniqueName(); defer { UIPasteboard.remove(withName: board.name) }
+        let adapter = LocalBackupClipboard(board: board)
+        adapter.write("PUBLIC EVENT TURN MARKER", expires: Date().addingTimeInterval(300))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertTrue(adapter.hasOwnedCopy)
+        adapter.clearOwned(); XCTAssertFalse(board.hasStrings)
+        adapter.write("PUBLIC EVENT TURN MARKER", expires: Date().addingTimeInterval(300))
+        try await Task.sleep(for: .milliseconds(100))
+        board.string = "UNRELATED PUBLIC MARKER"
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertFalse(adapter.hasOwnedCopy)
+        adapter.clearOwned(); XCTAssertTrue(board.string == "UNRELATED PUBLIC MARKER")
     }
 }

@@ -6121,46 +6121,6 @@
         }
       }
     },
-    "Clipboard contents can be exposed to other apps or clipboard tools. This copy requests device-local storage and a 30-second expiry, but clearing cannot revoke copies obtained elsewhere. Never paste the key into chat. Copying alone is not an offline backup.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clipboard contents can be exposed to other apps or clipboard tools. This copy requests device-local storage and a 30-second expiry, but clearing cannot revoke copies obtained elsewhere. Never paste the key into chat. Copying alone is not an offline backup."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le presse-papiers peut être accessible à d’autres apps ou outils. Cette copie demande un stockage local et une expiration après 30 secondes, mais son effacement ne révoque pas les copies déjà obtenues. Ne collez jamais la clé dans un chat. Copier n’est pas une sauvegarde hors ligne."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Буфер обмена может быть доступен другим приложениям или инструментам. Запрашиваются локальное хранение и срок 30 секунд, но очистка не удаляет копии, полученные другими. Никогда не вставляйте ключ в чат. Само копирование не является офлайн-резервированием."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Otras apps o herramientas pueden acceder al portapapeles. Se solicita copia local y caducidad de 30 segundos, pero borrarla no revoca copias obtenidas fuera. Nunca pegue la clave en un chat. Copiar no equivale a copia sin conexión."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "其他应用或剪贴板工具可能访问剪贴板。此次复制请求仅在本设备保存且 30 秒后过期，但清除无法撤回他处已获取的副本。切勿将密钥粘贴到聊天中。单纯复制并非离线备份。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Andere Apps oder Werkzeuge können die Zwischenablage lesen. Diese Kopie fordert lokale Speicherung und Ablauf nach 30 Sekunden an; Löschen widerruft keine bereits anderweitig erlangten Kopien. Fügen Sie den Schlüssel niemals in Chats ein. Kopieren allein ist keine Offline-Sicherung."
-          }
-        }
-      }
-    },
     "Authentication is required. No weaker storage option is available.": {
       "localizations": {
         "en": {
@@ -9001,46 +8961,6 @@
         }
       }
     },
-    "Private key copied locally for up to 30 seconds. Leaving this screen clears it. Clipboard access has risks; never paste it into chat. This is not an offline backup.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Private key copied locally for up to 30 seconds. Leaving this screen clears it. Clipboard access has risks; never paste it into chat. This is not an offline backup."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clé privée copiée localement pour 30 secondes maximum. Quitter l’écran l’efface. Le presse-papiers comporte des risques ; ne la collez jamais dans un chat. Ce n’est pas une sauvegarde hors ligne."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Приватный ключ скопирован локально на срок до 30 секунд. Уход с экрана очищает его. Буфер обмена рискован; никогда не вставляйте ключ в чат. Это не офлайн-копия."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clave privada copiada localmente hasta 30 segundos. Salir la borra. El portapapeles implica riesgos; nunca la pegue en un chat. No es copia sin conexión."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "私钥已在本设备复制，最长保留 30 秒。离开页面将清除。剪贴板存在风险；切勿粘贴到聊天中。这并非离线备份。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Privater Schlüssel für bis zu 30 Sekunden lokal kopiert. Verlassen löscht ihn. Zwischenablage birgt Risiken; niemals in Chats einfügen. Keine Offline-Sicherung."
-          }
-        }
-      }
-    },
     "This key does not recover this wallet. No changes were made.": {
       "localizations": {
         "en": {
@@ -10717,86 +10637,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Betrag überschreitet den unterstützten Bereich."
-          }
-        }
-      }
-    },
-    "The pending transfer record could not be saved. Sending is locked.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The pending transfer record could not be saved. Sending is locked."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’enregistrement du transfert en attente a échoué. L’envoi est verrouillé."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Не удалось сохранить запись ожидающего перевода. Отправка заблокирована."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo guardar el registro de la transferencia pendiente. El envío está bloqueado."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法保存待处理转账记录。发送已锁定。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Datensatz der ausstehenden Überweisung konnte nicht gespeichert werden. Senden ist gesperrt."
-          }
-        }
-      }
-    },
-    "An unresolved transfer already exists for this wallet. Check its status before sending again.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "An unresolved transfer already exists for this wallet. Check its status before sending again."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un transfert non résolu existe déjà pour ce portefeuille. Vérifiez son état avant tout nouvel envoi."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "У этого кошелька уже есть перевод с невыясненным исходом. Проверьте его статус перед новой отправкой."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ya existe una transferencia sin resolver para esta cartera. Comprueba su estado antes de volver a enviar."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此钱包已有结果未确定的转账。再次发送前请检查其状态。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Für diese Wallet besteht bereits eine ungeklärte Überweisung. Prüfen Sie ihren Status vor erneutem Senden."
           }
         }
       }
@@ -16601,46 +16441,6 @@
         }
       }
     },
-    "Status unknown": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Status unknown"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Statut inconnu"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Статус неизвестен"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Estado desconocido"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "状态未知"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Status unbekannt"
-          }
-        }
-      }
-    },
     "Confirmed on Massa Mainnet": {
       "localizations": {
         "en": {
@@ -19841,246 +19641,6 @@
         }
       }
     },
-    "Review historical payment": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Review historical payment"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Examiner le paiement historique"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Проверить прошлый платёж"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Revisar pago histórico"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "审核历史付款"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Historische Zahlung prüfen"
-          }
-        }
-      }
-    },
-    "Historical payment found": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Historical payment found"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paiement historique trouvé"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Прошлый платёж найден"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pago histórico encontrado"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已找到历史付款"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Historische Zahlung gefunden"
-          }
-        }
-      }
-    },
-    "The official Explorer reports Final and Success. Its signature and payment details match this stored intent.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The official Explorer reports Final and Success. Its signature and payment details match this stored intent."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’explorateur officiel indique Final et Succès. La signature et les détails du paiement correspondent à cette intention enregistrée."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Официальный обозреватель сообщает: платёж финализирован и выполнен успешно. Подпись и данные платежа соответствуют сохранённой операции."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El explorador oficial indica Final y Éxito. La firma y los datos del pago coinciden con esta intención guardada."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "官方浏览器报告交易已最终确认且执行成功。签名及付款详情与此已保存的付款意图一致。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der offizielle Explorer meldet Final und Erfolgreich. Signatur und Zahlungsdetails stimmen mit dieser gespeicherten Zahlungsabsicht überein."
-          }
-        }
-      }
-    },
-    "This is indexed historical evidence, not RPC confirmation or independent consensus verification. Authenticate only if you accept this specific result.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This is indexed historical evidence, not RPC confirmation or independent consensus verification. Authenticate only if you accept this specific result."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il s’agit de données historiques indexées, et non d’une confirmation RPC ni d’une vérification indépendante du consensus. Authentifiez-vous uniquement si vous acceptez ce résultat précis."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это исторические данные индексатора, а не подтверждение RPC или независимая проверка консенсуса. Подтверждайте личность, только если принимаете именно этот результат."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Son datos históricos indexados, no una confirmación RPC ni una verificación independiente del consenso. Autentícate solo si aceptas este resultado específico."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这是索引器提供的历史证据，并非 RPC 确认或独立的共识验证。仅在接受此特定结果时进行身份验证。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dies sind indexierte historische Daten, keine RPC-Bestätigung oder unabhängige Konsensprüfung. Authentifizieren Sie sich nur, wenn Sie dieses konkrete Ergebnis akzeptieren."
-          }
-        }
-      }
-    },
-    "Authenticate and accept historical result": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Authenticate and accept historical result"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "S’authentifier et accepter ce résultat"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Подтвердить личность и принять результат"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autenticarse y aceptar el resultado"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "验证身份并接受历史结果"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Authentifizieren und Ergebnis akzeptieren"
-          }
-        }
-      }
-    },
-    "Accept this historical payment result.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Accept this historical payment result."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Accepter ce résultat de paiement historique."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Принять этот результат прошлого платежа."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aceptar este resultado de pago histórico."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "接受此历史付款结果。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieses historische Zahlungsergebnis akzeptieren."
-          }
-        }
-      }
-    },
     "Historical result accepted": {
       "localizations": {
         "en": {
@@ -20201,86 +19761,6 @@
         }
       }
     },
-    "Historical evidence is unavailable, conflicting or does not match. This payment stays locked.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Historical evidence is unavailable, conflicting or does not match. This payment stays locked."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les données historiques sont indisponibles, contradictoires ou ne correspondent pas. Ce paiement reste verrouillé."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Исторические данные недоступны, противоречивы или не совпадают. Платёж остаётся заблокированным."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los datos históricos no están disponibles, son contradictorios o no coinciden. Este pago sigue bloqueado."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "历史证据不可用、存在冲突或不匹配。此付款仍被锁定。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die historischen Daten sind nicht verfügbar, widersprüchlich oder stimmen nicht überein. Diese Zahlung bleibt gesperrt."
-          }
-        }
-      }
-    },
-    "This does not send or retry a payment.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This does not send or retry a payment."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cette action n’envoie ni ne réessaie un paiement."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Это действие не отправляет и не повторяет платёж."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esto no envía ni reintenta un pago."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此操作不会发送或重试付款。"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hierdurch wird keine Zahlung gesendet oder wiederholt."
-          }
-        }
-      }
-    },
     "Evidence source": {
       "localizations": {
         "en": {
@@ -20317,6 +19797,606 @@
           "stringUnit": {
             "state": "translated",
             "value": "Datenquelle"
+          }
+        }
+      }
+    },
+    "Copy only to this iPhone’s clipboard with a 5-minute system expiration. Leaving Backup or switching apps does not clear it. Other apps may read or keep pasted content; expiration cannot revoke those copies. Never paste a key into chat. Copying is not an offline backup.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur in die Zwischenablage dieses iPhone kopieren, mit systemseitigem Ablauf nach 5 Minuten. Das Verlassen der Sicherungsansicht oder ein App-Wechsel leert sie nicht. Andere Apps können eingefügte Inhalte lesen oder behalten; der Ablauf entfernt diese Kopien nicht. Füge einen Schlüssel niemals in einen Chat ein. Kopieren ist keine Offline-Sicherung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy only to this iPhone’s clipboard with a 5-minute system expiration. Leaving Backup or switching apps does not clear it. Other apps may read or keep pasted content; expiration cannot revoke those copies. Never paste a key into chat. Copying is not an offline backup."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar solo al portapapeles de este iPhone con una caducidad del sistema de 5 minutos. Salir de Copia de seguridad o cambiar de app no lo borra. Otras apps pueden leer o guardar el contenido pegado; la caducidad no elimina esas copias. Nunca pegues una clave en un chat. Copiar no es una copia de seguridad sin conexión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copier uniquement dans le presse-papiers de cet iPhone avec une expiration système après 5 minutes. Quitter Sauvegarde ou changer d’app ne l’efface pas. D’autres apps peuvent lire ou conserver le contenu collé ; l’expiration ne supprime pas ces copies. Ne collez jamais une clé dans une discussion. Copier n’est pas une sauvegarde hors ligne."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копирование только в буфер обмена этого iPhone с системным сроком хранения 5 минут. Выход из резервной копии или переключение приложений не очищает его. Другие приложения могут прочитать или сохранить вставленные данные; истечение срока не удаляет эти копии. Не вставляйте ключ в чат. Копирование не является автономной резервной копией."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅复制到此 iPhone 的剪贴板，由系统在 5 分钟后使其过期。离开备份页面或切换应用不会清除内容。其他应用可能读取或保留粘贴的内容；过期无法撤销这些副本。切勿将私钥粘贴到聊天中。复制不等于离线备份。"
+          }
+        }
+      }
+    },
+    "Private key copied to this iPhone’s clipboard for up to 5 minutes. You can leave Backup to paste it. Others may read the clipboard; clear it when finished. Never paste it into chat. This is not an offline backup.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der private Schlüssel wurde für höchstens 5 Minuten in die Zwischenablage dieses iPhone kopiert. Du kannst die Sicherungsansicht zum Einfügen verlassen. Andere Apps können die Zwischenablage lesen; leere sie danach. Füge den Schlüssel niemals in einen Chat ein. Dies ist keine Offline-Sicherung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private key copied to this iPhone’s clipboard for up to 5 minutes. You can leave Backup to paste it. Others may read the clipboard; clear it when finished. Never paste it into chat. This is not an offline backup."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clave privada copiada al portapapeles de este iPhone durante un máximo de 5 minutos. Puedes salir de Copia de seguridad para pegarla. Otras apps pueden leer el portapapeles; bórralo al terminar. Nunca pegues la clave en un chat. Esto no es una copia de seguridad sin conexión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clé privée copiée dans le presse-papiers de cet iPhone pour 5 minutes au maximum. Vous pouvez quitter Sauvegarde pour la coller. D’autres apps peuvent lire le presse-papiers ; effacez-le ensuite. Ne collez jamais la clé dans une discussion. Ceci n’est pas une sauvegarde hors ligne."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрытый ключ скопирован в буфер обмена этого iPhone максимум на 5 минут. Можно выйти из раздела резервной копии, чтобы вставить ключ. Другие приложения могут прочитать буфер; очистите его после использования. Не вставляйте ключ в чат. Это не автономная резервная копия."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私钥已复制到此 iPhone 的剪贴板，最多保留 5 分钟。你可以离开备份页面进行粘贴。其他应用可能读取剪贴板，请在使用后清除。切勿将私钥粘贴到聊天中。这不是离线备份。"
+          }
+        }
+      }
+    },
+    "Log out of wallet \"%@\"": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log out of wallet \"%@\""
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se déconnecter du portefeuille \"%@\""
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выйти из кошелька \"%@\""
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar sesión de la cartera \"%@\""
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出钱包 \"%@\""
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von Wallet \"%@\" abmelden"
+          }
+        }
+      }
+    },
+    "Submitted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Submitted"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soumise"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправлено"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviada"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已提交"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übermittelt"
+          }
+        }
+      }
+    },
+    "Status unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status unavailable"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmation indisponible"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Статус недоступен"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estado no disponible"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状态不可用"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status nicht verfügbar"
+          }
+        }
+      }
+    },
+    "Submitted from this device": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Submitted from this device"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soumises depuis cet appareil"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправленные с этого устройства"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviadas desde este dispositivo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从此设备提交"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von diesem Gerät übermittelt"
+          }
+        }
+      }
+    },
+    "Accepted by Mainnet RPC. Execution is not yet confirmed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accepted by Mainnet RPC. Execution is not yet confirmed."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acceptée par le RPC Mainnet. Exécution non encore confirmée."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Принято RPC Mainnet. Исполнение ещё не подтверждено."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aceptada por el RPC de Mainnet. Ejecución aún sin confirmar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mainnet RPC 已接受，执行尚未确认。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vom Mainnet-RPC angenommen. Ausführung noch nicht bestätigt."
+          }
+        }
+      }
+    },
+    "Confirmation is unavailable. This payment may have executed. A new payment could transfer funds again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmation is unavailable. This payment may have executed. A new payment could transfer funds again."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmation indisponible. Ce paiement a peut-être été exécuté. Un nouveau paiement pourrait transférer les fonds à nouveau."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подтверждение недоступно. Платёж мог быть исполнен. Новый платёж может повторно перевести средства."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmación no disponible. Este pago puede haberse ejecutado. Un nuevo pago podría transferir fondos otra vez."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法获取确认。此付款可能已执行。新付款可能再次转出资金。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätigung nicht verfügbar. Diese Zahlung könnte ausgeführt worden sein. Eine neue Zahlung könnte erneut Geld übertragen."
+          }
+        }
+      }
+    },
+    "Submission outcome is unconfirmed. Check this operation in Activity before making another payment.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Submission outcome is unconfirmed. Check this operation in Activity before making another payment."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Résultat de la soumission non confirmé. Consultez cette opération dans Activité avant un autre paiement."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Результат отправки не подтверждён. Проверьте операцию в истории перед новым платежом."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resultado del envío sin confirmar. Consulte esta operación en Actividad antes de otro pago."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交结果尚未确认。再次付款前请在活动中查看此操作。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ergebnis der Übermittlung unbestätigt. Prüfen Sie diese Operation vor einer weiteren Zahlung unter Aktivitäten."
+          }
+        }
+      }
+    },
+    "A previous payment to this address for this amount has an unconfirmed result. This is a new payment and could transfer funds again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A previous payment to this address for this amount has an unconfirmed result. This is a new payment and could transfer funds again."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le résultat d’un paiement précédent à cette adresse pour ce montant n’est pas confirmé. Ceci est un nouveau paiement et pourrait transférer les fonds à nouveau."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Результат предыдущего платежа на этот адрес с этой суммой не подтверждён. Это новый платёж, который может повторно перевести средства."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un pago anterior a esta dirección por este importe tiene un resultado sin confirmar. Este es un pago nuevo y podría transferir fondos otra vez."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此前向此地址支付相同金额的结果尚未确认。这是新付款，可能再次转出资金。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Ergebnis einer früheren Zahlung an diese Adresse über diesen Betrag ist unbestätigt. Dies ist eine neue Zahlung und könnte erneut Geld übertragen."
+          }
+        }
+      }
+    },
+    "Another transfer action is in progress. Please wait.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another transfer action is in progress. Please wait."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une autre action de transfert est en cours. Veuillez patienter."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выполняется другое действие с переводом. Подождите."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay otra acción de transferencia en curso. Espere."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一项转账操作正在进行。请稍候。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine andere Überweisungsaktion läuft. Bitte warten."
+          }
+        }
+      }
+    },
+    "The transfer record could not be saved. Check protected storage before submitting.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The transfer record could not be saved. Check protected storage before submitting."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’enregistrer le transfert. Vérifiez le stockage protégé avant de soumettre."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось сохранить запись перевода. Проверьте защищённое хранилище перед отправкой."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar el registro. Revise el almacenamiento protegido antes de enviar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存转账记录。提交前请检查受保护存储。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Überweisungsdatensatz konnte nicht gespeichert werden. Prüfen Sie vor der Übermittlung den geschützten Speicher."
+          }
+        }
+      }
+    },
+    "The saved historical receipt is invalid.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved historical receipt is invalid."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le reçu historique enregistré est invalide."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранённое историческое подтверждение недействительно."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El comprobante histórico guardado no es válido."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存的历史凭据无效。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der gespeicherte historische Beleg ist ungültig."
+          }
+        }
+      }
+    },
+    "The available reports disagree. This payment's result is unconfirmed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The available reports disagree. This payment's result is unconfirmed."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les rapports disponibles divergent. Le résultat de ce paiement n’est pas confirmé."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступные отчёты противоречат друг другу. Результат платежа не подтверждён."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los informes disponibles discrepan. El resultado de este pago no está confirmado."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有报告不一致。此付款结果尚未确认。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die verfügbaren Berichte widersprechen sich. Das Zahlungsergebnis ist unbestätigt."
+          }
+        }
+      }
+    },
+    "The saved report does not establish this payment's result.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The saved report does not establish this payment's result."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le rapport enregistré ne permet pas d’établir le résultat de ce paiement."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранённый отчёт не устанавливает результат платежа."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El informe guardado no establece el resultado de este pago."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存的报告无法确定此付款结果。"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der gespeicherte Bericht belegt das Zahlungsergebnis nicht."
           }
         }
       }

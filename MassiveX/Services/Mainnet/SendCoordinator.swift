@@ -6,7 +6,7 @@ enum SendFailure: Error, Equatable {
     case historicalEvidence, journalCapacity, creationMinimum, wallet, keyUnavailable, cancelled, stale, changed, recipient, amount, funds, overflow, journal, duplicate, alreadyRecorded, response, network, privacy
     var message: String {
         switch self {
-        case .historicalEvidence: L("Historical evidence is unavailable, conflicting or does not match. This payment stays locked.")
+        case .historicalEvidence: L("The saved historical receipt is invalid.")
         case .journalCapacity: TransferJournalError.capacity.message
         case .creationMinimum: L("Recipient existence is unconfirmed. Send at least 0.001 MAS to cover possible account creation; this cost is deducted from the amount, not added to the fee.")
         case .wallet: L("Select a current owned Mainnet wallet with a valid public identity.")
@@ -17,8 +17,8 @@ enum SendFailure: Error, Equatable {
         case .amount: L("Enter a positive MAS amount with at most nine decimal places.")
         case .funds: L("Insufficient available balance for amount and fee.")
         case .overflow: L("The amount exceeds the supported range.")
-        case .journal: L("The pending transfer record could not be saved. Sending is locked.")
-        case .duplicate: L("An unresolved transfer already exists for this wallet. Check its status before sending again.")
+        case .journal: L("The transfer record could not be saved. Check protected storage before submitting.")
+        case .duplicate: L("Another transfer action is in progress. Please wait.")
         case .alreadyRecorded: L("This exact operation is already recorded. Wait for the next period, then refresh and review again.")
         case .response, .network: L("Mainnet could not be verified. Check your connection and refresh.")
         case .privacy: L("Return to the active app and stop screen capture before continuing.")
@@ -162,12 +162,7 @@ protocol TransferNetworking: Sendable {
     private(set) var pending: [PendingTransfer] = []
     private(set) var failure: SendFailure?
     var message: String? { journalIssue?.message ?? failure?.message }
-    private(set) var historicalReview: HistoricalRecoveryReview?
-    private var historicalActive = false
-    private var historicalCaptured = false
-    @ObservationIgnored private var historicalAuthentication: (any WalletAuthenticating)?
-    private let historicalClient: any HistoricalEvidenceReading
-    private let historicalAuthenticationFactory: () -> any WalletAuthenticating
+    private(set) var reconcilingIDs: Set<String> = []
     private(set) var busy = false
     private(set) var journalIssue: TransferJournalError?
     private var blockedJournal: Bool { journalIssue != nil }
@@ -182,11 +177,8 @@ protocol TransferNetworking: Sendable {
     private let journal: any TransferJournal
     private let network: any TransferNetworking
     @ObservationIgnored private var signer: (any TransferSigning)?
-    init(network: any TransferNetworking = MainnetTransferRPC(), journal: any TransferJournal = FileTransferJournal(),
-         historicalClient: any HistoricalEvidenceReading = OfficialHistoricalClient(),
-         historicalAuthentication: @escaping () -> any WalletAuthenticating = { LocalWalletAuthentication() }) {
-        self.network = network; self.journal = journal; self.historicalClient = historicalClient
-        self.historicalAuthenticationFactory = historicalAuthentication
+    init(network: any TransferNetworking = MainnetTransferRPC(), journal: any TransferJournal = FileTransferJournal()) {
+        self.network = network; self.journal = journal
         _ = reloadJournal()
     }
     /// Explicit, validated read/write recovery; never substitutes an empty array for lost history.
@@ -209,7 +201,6 @@ protocol TransferNetworking: Sendable {
             }
             try journal.write(loaded) // Confirm storage is writable before clearing the fault.
             pending = loaded; journalIssue = nil; failure = nil; invalidateReview()
-            if let record = pending.first(where: { $0.draft.wallet.sourceIdentity == selection && !$0.hasTrustedResolution }) { review = record.draft; show(record.state) }
             return true
         } catch { journalIssue = TransferJournalError.classify(error); failure = .journal; return false }
     }
@@ -217,14 +208,17 @@ protocol TransferNetworking: Sendable {
     func select(_ wallet: SendWallet?) {
         guard selection != wallet?.sourceIdentity else { return }
         selection = wallet?.sourceIdentity; invalidateReview()
-        if let wallet, let record = unresolved(wallet) { show(record.state); review = record.draft }
     }
     func invalidateReview() {
-        historicalAuthentication?.cancel(); historicalAuthentication = nil; historicalReview = nil
         generation += 1; signer?.cancel(); signer = nil; review = nil; phase = .draft; failure = blockedJournal ? .journal : nil
     }
-    // Only a durable strict RPC or explicitly owner-reviewed historical receipt resolves an intent.
+    // Read-only history query. Uncertainty never governs eligibility for a distinct new operation.
     func unresolved(_ wallet: SendWallet) -> PendingTransfer? { pending.first { $0.draft.wallet.sourceIdentity == wallet.sourceIdentity && !$0.hasTrustedResolution } }
+    func hasPossibleDuplicate(_ draft: ReviewedTransfer) -> Bool {
+        pending.contains { $0.draft.operationID != draft.operationID &&
+            $0.draft.wallet.sourceIdentity == draft.wallet.sourceIdentity &&
+            $0.draft.recipient == draft.recipient && $0.draft.amount == draft.amount && !$0.hasTrustedResolution }
+    }
     private func requireCurrent(_ wallet: SendWallet, token: Int) throws {
         guard generation == token, selection == wallet.sourceIdentity, !Task.isCancelled else { throw SendFailure.cancelled }
     }
@@ -235,7 +229,6 @@ protocol TransferNetworking: Sendable {
         do {
             guard !blockedJournal else { throw SendFailure.journal }
             guard pending.count < TransferJournalPolicy.maximumRecords else { throw SendFailure.journalCapacity }
-            guard unresolved(wallet) == nil else { throw SendFailure.duplicate }
             guard (try? MassaPublicAccount.validateUserAddress(recipient)) != nil, !KnownUnsafeWallets.addresses.contains(recipient) else { throw SendFailure.recipient }
             let snapshot = try await network.snapshot(source: wallet.address, recipient: recipient)
             try requireCurrent(wallet, token: token)
@@ -255,7 +248,6 @@ protocol TransferNetworking: Sendable {
         do {
             guard !blockedJournal else { throw SendFailure.journal }
             guard pending.count < TransferJournalPolicy.maximumRecords else { throw SendFailure.journalCapacity }
-            guard unresolved(draft.wallet) == nil else { throw SendFailure.duplicate }
             guard !pending.contains(where: { $0.draft.operationID == draft.operationID }) else { throw SendFailure.alreadyRecorded }
             try requireCurrent(draft.wallet, token: token)
             guard now.timeIntervalSince(draft.reviewedAt) >= 0, now.timeIntervalSince(draft.reviewedAt) <= 20 else { throw SendFailure.stale }
@@ -275,6 +267,7 @@ protocol TransferNetworking: Sendable {
             guard Date().timeIntervalSince(draft.reviewedAt) <= 20 else { throw SendFailure.stale }
             let publicAccount = try MassaPublicAccount(rawPublicKey: MassaCodec.decode(draft.wallet.publicKey, prefix: "P"))
             guard try publicAccount.verify(message: MassaOperationEncoding.canonical(content: draft.content, publicKey: draft.wallet.publicKey), signature: signature) else { throw SendFailure.keyUnavailable }
+            guard !pending.contains(where: { $0.draft.operationID == draft.operationID }) else { throw SendFailure.alreadyRecorded }
             // Save BEFORE the only network write. A failed save forbids submission.
             try save(PendingTransfer(draft: draft, state: .submitting))
             phase = .submitting; submitted = true
@@ -284,7 +277,7 @@ protocol TransferNetworking: Sendable {
             if generation == token { phase = .pending }
         } catch {
             if submitted {
-                // Even when selection changed, the source-identity lock must survive.
+                // Retain the original attempt even after navigation; it must never be dispatched again.
                 do { try save(PendingTransfer(draft: draft, state: .outcomeUnknown)) } catch { journalIssue = journalIssue ?? .unavailable }
                 if generation == token { phase = .outcomeUnknown }
             } else if generation == token {
@@ -295,11 +288,12 @@ protocol TransferNetworking: Sendable {
     }
     func reconcile(_ record: PendingTransfer) async {
         guard !blockedJournal else { failure = .journal; return }
-        guard !busy, pending.contains(where: { $0.draft == record.draft && !$0.hasTrustedResolution }) else { return }; busy = true
+        guard !busy, !reconcilingIDs.contains(record.draft.operationID), pending.contains(where: { $0.draft == record.draft && !$0.hasTrustedResolution }) else { return }
+        reconcilingIDs.insert(record.draft.operationID)
         let token = generation
-        defer { busy = false }
+        defer { reconcilingIDs.remove(record.draft.operationID) }
         do {
-            // Not-found/unknown never unlocks a source. No resend exists.
+            // Missing data never resolves execution. Reconciliation has no resend path.
             let assessment = try await network.reconciliation(for: record.draft)
             guard !Task.isCancelled else { return }
             // Bare terminal flags cannot bypass strict canonical/provider validation at this boundary.
@@ -312,77 +306,15 @@ protocol TransferNetworking: Sendable {
             let state = retained.state
             guard state != .submitting else { throw SendFailure.response }
             try save(PendingTransfer(draft: record.draft, state: state, assessment: retained))
-            if retained.resolvedOutcome(for: record.draft) != nil, historicalReview?.draft.operationID == record.draft.operationID {
-                historicalReview = nil; historicalAuthentication?.cancel(); historicalAuthentication = nil
+            // A history refresh may update only this attempt's visible acknowledgement.
+            // It must never replace a new review or reopen an older payment in Send.
+            if generation == token, review?.operationID == record.draft.operationID,
+               [.pending, .finalized, .failed, .outcomeUnknown].contains(phase) {
+                failure = nil; show(state)
             }
-            if generation == token, selection == record.draft.wallet.sourceIdentity, review == nil || review?.operationID == record.draft.operationID {
-                failure = nil; review = record.draft; show(state)
-            }
-        } catch { if generation == token, !Task.isCancelled { failure = error as? SendFailure ?? .network } }
+        } catch { if generation == token, review?.operationID == record.draft.operationID, !Task.isCancelled { failure = error as? SendFailure ?? .network } }
     }
-    func cancelHistoricalRecovery() { if historicalReview != nil || historicalAuthentication != nil { invalidateReview() } }
-    func historicalPrivacy(active: Bool, captured: Bool, background: Bool = false) {
-        historicalActive = active; historicalCaptured = captured
-        if captured || background { invalidateReview() }
-    }
-    private func historicalEligible(_ draft: ReviewedTransfer) -> Bool {
-        guard let stored = pending.first(where: { $0.draft == draft && !$0.hasTrustedResolution }) else { return false }
-        let assessment = stored.assessment
-        return assessment?.reason != .conflictingObservations &&
-            !(assessment?.terminalClaims ?? []).contains(.failed) &&
-            !(assessment?.observations ?? []).contains(where: { $0.reportedState == .failed }) &&
-            assessment?.reportedState != .failed
-    }
-    func prepareHistoricalRecovery(_ record: PendingTransfer) async {
-        guard !busy, !blockedJournal, historicalActive, !historicalCaptured,
-              selection == record.draft.wallet.sourceIdentity, historicalEligible(record.draft) else { failure = .historicalEvidence; return }
-        busy = true; failure = nil; let token = generation
-        defer { busy = false }
-        do {
-            let evidence = try await historicalClient.evidence(for: record.draft)
-            try requireCurrent(record.draft.wallet, token: token); try evidence.validate(for: record.draft)
-            guard historicalActive, !historicalCaptured else { throw SendFailure.privacy }
-            historicalReview = HistoricalRecoveryReview(draft: record.draft, evidence: evidence, reviewedAt: Date())
-        } catch { if generation == token { failure = error as? SendFailure ?? .historicalEvidence } }
-    }
-    func confirmHistoricalRecovery(_ approved: HistoricalRecoveryReview) async {
-        guard !busy, !blockedJournal, historicalReview == approved, historicalActive, !historicalCaptured,
-              selection == approved.draft.wallet.sourceIdentity, historicalEligible(approved.draft) else { failure = .historicalEvidence; return }
-        busy = true; let token = generation; let authentication = historicalAuthenticationFactory()
-        historicalAuthentication = authentication
-        defer { authentication.cancel(); historicalAuthentication = nil; busy = false }
-        do {
-            guard (0...300).contains(Date().timeIntervalSince(approved.reviewedAt)) else { throw SendFailure.stale }
-            let context = try await authentication.authorize(reason: L("Accept this historical payment result."))
-            defer { context.invalidate() }
-            // Face ID/passcode can temporarily deactivate the scene. Background/capture still revoke it.
-            for _ in 0..<20 {
-                try requireCurrent(approved.draft.wallet, token: token)
-                guard !historicalCaptured else { throw SendFailure.privacy }
-                if historicalActive { break }
-                try await Task.sleep(for: .milliseconds(100))
-            }
-            guard historicalActive, historicalReview == approved else { throw SendFailure.privacy }
-            let authorizedAt = Date()
-            let refreshed = try await historicalClient.evidence(for: approved.draft)
-            try requireCurrent(approved.draft.wallet, token: token)
-            guard historicalActive, !historicalCaptured, refreshed.sameStatement(as: approved.evidence), historicalEligible(approved.draft) else { throw SendFailure.historicalEvidence }
-            let receipt = OwnerHistoricalResolution(policy: OwnerHistoricalResolution.policyID, authorizationMethod: "deviceOwnerAuthentication",
-                authorizedAt: authorizedAt, acceptedAt: Date(), evidence: refreshed)
-            try receipt.validate(for: approved.draft)
-            let assessment = ReconciliationAssessment(state: .finalized, reason: .ownerReviewedHistorical,
-                checkedAt: receipt.acceptedAt, reportedFinalPeriod: nil, reportedState: .finalized,
-                terminalClaims: [.finalized], historicalResolution: receipt)
-                .retainingHistory(pending.first(where: { $0.draft == approved.draft })?.assessment)
-            guard assessment.resolvedOutcome(for: approved.draft) == .finalized else { throw SendFailure.historicalEvidence }
-            try save(PendingTransfer(draft: approved.draft, state: .finalized, assessment: assessment))
-            historicalReview = nil; review = approved.draft; failure = nil; phase = .finalized
-        } catch {
-            if generation == token { if let onboarding = error as? OnboardingError, case .cancelled = onboarding { failure = .cancelled }
-                else { failure = (error as? SendFailure) ?? .historicalEvidence } }
-        }
-    }
-    /// Scheduling only, never evidence of execution. Old/expired/pruned intents remain locked.
+    /// Scheduling reads only, never execution evidence or permission to retransmit.
     var recentUnresolvedOperationID: String? {
         guard !blockedJournal else { return nil }
         return pending.first {
@@ -405,7 +337,6 @@ protocol TransferNetworking: Sendable {
     /// Explicit navigation to a NEW draft; cannot unlock or retry an existing intent.
     @discardableResult func beginNewTransfer(for wallet: SendWallet) -> Bool {
         guard !busy, !blockedJournal, selection == wallet.sourceIdentity else { return false }
-        guard unresolved(wallet) == nil else { failure = .duplicate; return false }
         invalidateReview(); return true
     }
     private func save(_ record: PendingTransfer) throws {
@@ -417,7 +348,7 @@ protocol TransferNetworking: Sendable {
         catch TransferJournalError.capacity { throw SendFailure.journalCapacity }
         catch { journalIssue = TransferJournalError.classify(error); throw SendFailure.journal }
     }
-    /// Merge-only public restoration. It can restore source locks, never authorize clean continuity
+    /// Merge-only public restoration. Reserves exact IDs, never authorizes clean continuity
     /// or turn a reported terminal result into verified finality. No key access or network writes.
     func restorePublicOperations(_ file: PublicOperationFile, for wallet: SendWallet) throws {
         guard !busy else { throw SendFailure.duplicate }
@@ -432,7 +363,6 @@ protocol TransferNetworking: Sendable {
         do {
             try TransferJournalPolicy.validate(merged); try journal.write(merged)
             pending = merged; invalidateReview()
-            if selection == wallet.sourceIdentity, let record = unresolved(wallet) { review = record.draft; show(record.state) }
         } catch TransferJournalError.capacity { throw SendFailure.journalCapacity }
         catch { journalIssue = TransferJournalError.classify(error); throw SendFailure.journal }
     }

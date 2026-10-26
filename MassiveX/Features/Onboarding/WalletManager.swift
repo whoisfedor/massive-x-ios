@@ -90,6 +90,8 @@ enum WalletRemovalFailure: Error, Equatable {
     private let defaults: UserDefaults
     private let stores: (String) -> any TestAccountSecretStore
     private let authentication: () -> any WalletAuthenticating
+    private let clipboardFactory: (String) -> any BackupClipboard
+    @ObservationIgnored private var backupClipboards: [String: any BackupClipboard] = [:]
     private let client: any MainnetReading
     private let balanceChanged: (String, MASAmount) async -> Void
     private let walletsRemoved: (Set<String>) -> Void
@@ -117,11 +119,12 @@ enum WalletRemovalFailure: Error, Equatable {
          stores: @escaping (String) -> any TestAccountSecretStore = { TestAccountKeychain(service: WalletManager.keychainService($0)) },
          legacyStores: @escaping (String) -> any TestAccountSecretStore = { TestAccountKeychain(service: LegacyWalletMigration.service($0), account: LegacyWalletMigration.account) },
          authentication: @escaping () -> any WalletAuthenticating = { LocalWalletAuthentication() },
+         clipboardFactory: @escaping (String) -> any BackupClipboard = { _ in LocalBackupClipboard() },
          client: any MainnetReading = MainnetRPC(),
          balanceChanged: @escaping (String, MASAmount) async -> Void = { id, amount in await BalanceNotifications.shared.observe(walletID: id, balance: amount) },
          removalClock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
          walletsRemoved: @escaping (Set<String>) -> Void = { BalanceNotifications.shared.removeWallets($0); MainnetHistory.shared.clear() }) {
-        self.defaults = defaults; self.stores = stores; self.legacyStores = legacyStores; self.authentication = authentication; self.client = client; self.balanceChanged = balanceChanged; self.walletsRemoved = walletsRemoved; self.removalClock = removalClock
+        self.defaults = defaults; self.stores = stores; self.legacyStores = legacyStores; self.authentication = authentication; self.clipboardFactory = clipboardFactory; self.client = client; self.balanceChanged = balanceChanged; self.walletsRemoved = walletsRemoved; self.removalClock = removalClock
         if let data = defaults.data(forKey: catalogKey) {
             if let saved = try? JSONDecoder().decode(Catalog.self, from: data),
                (saved.hiddenArchives ?? []).allSatisfy(\.isQuarantined), Self.valid(saved.wallets + (saved.hiddenArchives ?? [])) {
@@ -189,8 +192,10 @@ enum WalletRemovalFailure: Error, Equatable {
             self.wallets[index].backupAcknowledged = record.backupAcknowledged
             self.persist()
         }
+        // Retain only pasteboard counter/expiry ownership, never the copied key, across selection.
+        if backupClipboards[selected.id] == nil { backupClipboards[selected.id] = clipboardFactory(selected.id) }
         return WalletOnboarding(store: selected.storage == .legacy ? legacyStores(selected.id) : stores(selected.id),
-            authentication: authentication(), metadata: metadata)
+            authentication: authentication(), metadata: metadata, clipboard: backupClipboards[selected.id]!)
     }
     func select(_ id: String) {
         guard activeWallets.contains(where: { $0.id == id }) else { return }
@@ -359,6 +364,8 @@ enum WalletRemovalFailure: Error, Equatable {
                     guard !Task.isCancelled, removalGeneration == authorizedGeneration, removalActive, !removalCaptured else { throw WalletRemovalFailure.privacy }
                     guard (0...30).contains(removalClock() - started) else { throw WalletRemovalFailure.expired }
                     if wallet.kind == .owned { try stores(wallet.id).delete() }
+                    // Explicit authenticated wallet deletion still clears its own copied item.
+                    backupClipboards.removeValue(forKey: wallet.id)?.clearOwned()
                     removed.insert(wallet.id)
                     wallets.removeAll { $0.id == wallet.id }
                     if selectedID == wallet.id { selectedID = nil }
